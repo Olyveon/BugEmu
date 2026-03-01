@@ -6,17 +6,27 @@
 #include <string>
 #include <fstream>
 #include <cstring>
+#include <stack>
 
 uint16_t ProgramCounter;
 uint8_t A;
 uint8_t X;
 uint8_t Y;
+uint8_t stackPointer;
+
+bool flag_Carry;
+bool flag_Zero;
+bool flag_InterruptDisable;
+bool flag_Decimal;
+bool flag_Overflow;
+bool flag_Negative;
 
 std::array<uint8_t, 0x800> RAM{};
 std::array<uint8_t, 0x8000> ROM{};
 std::array<uint8_t, 0x10> Header{};
 
-std::string filepath = "C:/Users/USER UNAL/Documents/GitHub/BugEmu/test_roms/2_ReadWrite.nes";
+
+std::string filepath = "/home/felipe/CLionProjects/BugEmu/test_roms/4_TheStack.nes";
 
 bool CPU_Halted = false;
 
@@ -46,6 +56,17 @@ void Write(uint16_t Address, uint8_t Value) {
     }
 }
 
+void Push(uint8_t Value) {
+    Write((0x100 | stackPointer), Value);
+    stackPointer --;
+}
+
+uint8_t Pull() {
+    stackPointer++;
+    uint8_t Temp = Read((0x100 | stackPointer));
+    return Temp;
+}
+
 std::vector<uint8_t> ReadAllBytes(const std::string& path)
 {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
@@ -70,6 +91,8 @@ void Reset() {
     uint8_t PCL = Read(0xFFFC);
     uint8_t PCH = Read(0xFFFD);
     ProgramCounter = (PCH << 8) | PCL;
+    flag_InterruptDisable = true;
+    stackPointer = 0xFD;
     Run();
 }
 
@@ -95,8 +118,162 @@ void Emulate_CPU() {
                 ProgramCounter++;
                 cycle = 0;
                 break;
+            case 0x10: // BPL, Branch on Plus TODO: Add way to check if high byte of PC has changed thus requiring one more CPU Cycle
+            {
+                uint8_t Op = Read(ProgramCounter);
+                ProgramCounter++;
+
+                if (!flag_Negative) {
+                    if (Op > 127) {
+                        Op -= 256;
+                    }
+                    ProgramCounter = Op + ProgramCounter;
+                    cycle = 0;
+                } else {
+                    cycle = 0;
+                }
+                break;
+            }
+            case 0x30: //BMI Branch on Minus
+            {
+                uint8_t Op = Read(ProgramCounter);
+                ProgramCounter++;
+                if (flag_Negative) {
+                    if (Op > 127) {
+                        Op -= 256;
+                    }
+                    ProgramCounter = Op + ProgramCounter;
+                    cycle = 0;
+                } else {
+                    cycle = 0;
+                }
+                break;
+            }
+            case 0x50: //BVC Branch on Overflow Clear
+            {
+                uint8_t Op = Read(ProgramCounter);
+                ProgramCounter++;
+                if (!flag_Overflow) {
+                    if (Op > 127) {
+                        Op -= 256;
+                    }
+                    ProgramCounter = Op + ProgramCounter;
+                    cycle = 0;
+                } else {
+                    cycle = 0;
+                }
+                break;
+            }
+            case 0x70: //BVS Branch on Overflow Set
+            {
+                uint8_t Op = Read(ProgramCounter);
+                ProgramCounter++;
+                if (flag_Overflow) {
+                    if (Op > 127) {
+                        Op -= 256;
+                    }
+                    ProgramCounter = Op + ProgramCounter;
+                    cycle = 0;
+                } else {
+                    cycle = 0;
+                }
+                break;
+            }
+            case 0x90: //BCC Branch on Carry Clear
+            {
+                uint8_t Op = Read(ProgramCounter);
+                ProgramCounter++;
+
+                if (!flag_Carry) {
+                    if (Op > 127) {
+                        Op -= 256;
+                    }
+                    ProgramCounter = Op + ProgramCounter;
+                    cycle = 0;
+                } else {
+                    cycle = 0;
+                }
+                break;
+            }
+            case 0xB0: //BCS Branch on Carry Set
+            {
+                uint8_t Op = Read(ProgramCounter);
+                ProgramCounter++;
+                if (flag_Carry) {
+                    if (Op > 127) {
+                        Op -= 256;
+                    }
+                    ProgramCounter = Op + ProgramCounter;
+                    cycle = 0;
+                } else {
+                    cycle = 0;
+                }
+                break;
+            }
+            case 0xD0: //BNE Branch on Not Equal (not zero)
+            {
+                uint8_t Op = Read(ProgramCounter);
+                ProgramCounter++;
+                if (!flag_Zero) {
+                    if (Op > 127) {
+                        Op -= 256;
+                    }
+                    ProgramCounter = Op + ProgramCounter;
+                    cycle = 0;
+                } else {
+                    cycle = 0;
+                }
+                break;
+            }
+            case 0xF0: //BNQ Branch on Equal (zero)
+            {
+                uint8_t Op = Read(ProgramCounter);
+                ProgramCounter++;
+                if (flag_Zero) {
+                    if (Op > 127) {
+                        Op -= 256;
+                    }
+                    ProgramCounter = Op + ProgramCounter;
+                    cycle = 0;
+                } else {
+                    cycle = 0;
+                }
+                break;
+            }
+            case 0x48: //PHA Push A
+                Push(A);
+                cycle = 0;
+                break;
+            case 0x68: //PLA Pull A
+                A = Pull();
+                flag_Zero = A == 0;
+                flag_Negative = A >= 0x80;
+                cycle = 0;
+                break;
+            case 0x20: //JSR
+            {
+                uint8_t Low = Read(ProgramCounter);
+                ProgramCounter++;
+                uint8_t High = Read(ProgramCounter);
+                Push(ProgramCounter >> 8);  //Push PCH
+                Push(static_cast<uint8_t>(ProgramCounter)); //Push PCL
+                ProgramCounter = (High << 8) | Low;
+                cycle = 0;
+                break;
+            }
+            case 0x60: //RTS
+            {
+                uint8_t Low = Pull();
+                uint8_t High = Pull();
+                ProgramCounter = (High << 8) | Low;
+                ProgramCounter++;
+                cycle = 0;
+                break;
+            }
             case 0xA0:  //LDY Immediate
                 Y = Read(ProgramCounter);
+                flag_Zero = Y == 0;
+                flag_Negative = Y > 127;
                 ProgramCounter++;
                 cycle = 0;
                 break;
@@ -104,6 +281,8 @@ void Emulate_CPU() {
                 uint8_t Addr = Read(ProgramCounter);
                 ProgramCounter++;
                 Y = Read(Addr);
+                flag_Zero = Y == 0;
+                flag_Negative = Y > 127;
                 cycle = 0;
                 break;
             }
@@ -113,11 +292,15 @@ void Emulate_CPU() {
                 uint8_t High = Read(ProgramCounter);
                 ProgramCounter++;
                 Y = Read((High << 8) | Low);
+                flag_Zero = Y == 0;
+                flag_Negative = Y > 127;
                 cycle = 0;
                 break;
             }
             case 0xA2:  //LDX Immediate
                 X = Read(ProgramCounter);
+                flag_Zero = X == 0;
+                flag_Negative = X > 127;
                 ProgramCounter++;
                 cycle = 0;
                 break;
@@ -125,6 +308,8 @@ void Emulate_CPU() {
                 uint8_t Addr = Read(ProgramCounter);
                 ProgramCounter++;
                 X = Read(Addr);
+                flag_Zero = X == 0;
+                flag_Negative = X > 127;
                 cycle = 0;
                 break;
             }
@@ -134,11 +319,15 @@ void Emulate_CPU() {
                 uint8_t High = Read(ProgramCounter);
                 ProgramCounter++;
                 X = Read((High << 8) | Low);
+                flag_Zero = X == 0;
+                flag_Negative = X > 127;
                 cycle = 0;
                 break;
             }
             case 0xA9:  //LDA Immediate
                 A = Read(ProgramCounter);
+                flag_Zero = A == 0;
+                flag_Negative = A > 127;
                 ProgramCounter++;
                 cycle = 0;
                 break;
@@ -146,6 +335,8 @@ void Emulate_CPU() {
                 uint8_t Addr = Read(ProgramCounter);
                 ProgramCounter++;
                 A = Read(Addr);
+                flag_Zero = A == 0;
+                flag_Negative = A > 127;
                 cycle = 0;
                 break;
             }
@@ -155,6 +346,8 @@ void Emulate_CPU() {
                 uint8_t High = Read(ProgramCounter);
                 ProgramCounter++;
                 A = Read((High << 8) | Low);
+                flag_Zero = A == 0;
+                flag_Negative = A > 127;
                 cycle = 0;
                 break;
             }
@@ -166,8 +359,8 @@ void Emulate_CPU() {
                 cycle = 0;
                 break;
             }
-            case 0x8D: {
-                //STA Absolute
+            case 0x8D: //STA Absolute
+                {
                 uint8_t Temp_Low = Read(ProgramCounter);
                 ProgramCounter++;
                 uint8_t Temp_High = Read(ProgramCounter);
