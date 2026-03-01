@@ -6,7 +6,7 @@
 #include <string>
 #include <fstream>
 #include <cstring>
-#include <stack>
+
 
 uint16_t ProgramCounter;
 uint8_t A;
@@ -106,6 +106,9 @@ int cycle = 0;
 uint8_t opcode;
 
 void Emulate_CPU() {
+    uint8_t Temp;
+    uint8_t High;
+    uint8_t Low;
     if (cycle == 0) {
         opcode = Read(ProgramCounter);
         ProgramCounter++;
@@ -120,14 +123,14 @@ void Emulate_CPU() {
                 break;
             case 0x10: // BPL, Branch on Plus TODO: Add way to check if high byte of PC has changed thus requiring one more CPU Cycle
             {
-                uint8_t Op = Read(ProgramCounter);
+                Temp = Read(ProgramCounter);
                 ProgramCounter++;
 
                 if (!flag_Negative) {
-                    if (Op > 127) {
-                        Op -= 256;
+                    if (Temp > 127) {
+                        Temp -= 256;
                     }
-                    ProgramCounter = Op + ProgramCounter;
+                    ProgramCounter = Temp + ProgramCounter;
                     cycle = 0;
                 } else {
                     cycle = 0;
@@ -136,13 +139,13 @@ void Emulate_CPU() {
             }
             case 0x30: //BMI Branch on Minus
             {
-                uint8_t Op = Read(ProgramCounter);
+                Temp = Read(ProgramCounter);
                 ProgramCounter++;
                 if (flag_Negative) {
-                    if (Op > 127) {
-                        Op -= 256;
+                    if (Temp > 127) {
+                        Temp -= 256;
                     }
-                    ProgramCounter = Op + ProgramCounter;
+                    ProgramCounter = Temp + ProgramCounter;
                     cycle = 0;
                 } else {
                     cycle = 0;
@@ -151,13 +154,13 @@ void Emulate_CPU() {
             }
             case 0x50: //BVC Branch on Overflow Clear
             {
-                uint8_t Op = Read(ProgramCounter);
+                Temp = Read(ProgramCounter);
                 ProgramCounter++;
                 if (!flag_Overflow) {
-                    if (Op > 127) {
-                        Op -= 256;
+                    if (Temp > 127) {
+                        Temp -= 256;
                     }
-                    ProgramCounter = Op + ProgramCounter;
+                    ProgramCounter = Temp + ProgramCounter;
                     cycle = 0;
                 } else {
                     cycle = 0;
@@ -166,13 +169,13 @@ void Emulate_CPU() {
             }
             case 0x70: //BVS Branch on Overflow Set
             {
-                uint8_t Op = Read(ProgramCounter);
+                Temp = Read(ProgramCounter);
                 ProgramCounter++;
                 if (flag_Overflow) {
-                    if (Op > 127) {
-                        Op -= 256;
+                    if (Temp > 127) {
+                        Temp -= 256;
                     }
-                    ProgramCounter = Op + ProgramCounter;
+                    ProgramCounter = Temp + ProgramCounter;
                     cycle = 0;
                 } else {
                     cycle = 0;
@@ -181,14 +184,14 @@ void Emulate_CPU() {
             }
             case 0x90: //BCC Branch on Carry Clear
             {
-                uint8_t Op = Read(ProgramCounter);
+                Temp = Read(ProgramCounter);
                 ProgramCounter++;
 
                 if (!flag_Carry) {
-                    if (Op > 127) {
-                        Op -= 256;
+                    if (Temp > 127) {
+                        Temp -= 256;
                     }
-                    ProgramCounter = Op + ProgramCounter;
+                    ProgramCounter = Temp + ProgramCounter;
                     cycle = 0;
                 } else {
                     cycle = 0;
@@ -197,13 +200,13 @@ void Emulate_CPU() {
             }
             case 0xB0: //BCS Branch on Carry Set
             {
-                uint8_t Op = Read(ProgramCounter);
+                Temp = Read(ProgramCounter);
                 ProgramCounter++;
                 if (flag_Carry) {
-                    if (Op > 127) {
-                        Op -= 256;
+                    if (Temp > 127) {
+                        Temp -= 256;
                     }
-                    ProgramCounter = Op + ProgramCounter;
+                    ProgramCounter = Temp + ProgramCounter;
                     cycle = 0;
                 } else {
                     cycle = 0;
@@ -212,13 +215,13 @@ void Emulate_CPU() {
             }
             case 0xD0: //BNE Branch on Not Equal (not zero)
             {
-                uint8_t Op = Read(ProgramCounter);
+                Temp = Read(ProgramCounter);
                 ProgramCounter++;
                 if (!flag_Zero) {
-                    if (Op > 127) {
-                        Op -= 256;
+                    if (Temp > 127) {
+                        Temp -= 256;
                     }
-                    ProgramCounter = Op + ProgramCounter;
+                    ProgramCounter = Temp + ProgramCounter;
                     cycle = 0;
                 } else {
                     cycle = 0;
@@ -227,13 +230,13 @@ void Emulate_CPU() {
             }
             case 0xF0: //BNQ Branch on Equal (zero)
             {
-                uint8_t Op = Read(ProgramCounter);
+                Temp = Read(ProgramCounter);
                 ProgramCounter++;
                 if (flag_Zero) {
-                    if (Op > 127) {
-                        Op -= 256;
+                    if (Temp > 127) {
+                        Temp -= 256;
                     }
-                    ProgramCounter = Op + ProgramCounter;
+                    ProgramCounter = Temp + ProgramCounter;
                     cycle = 0;
                 } else {
                     cycle = 0;
@@ -252,19 +255,26 @@ void Emulate_CPU() {
                 break;
             case 0x20: //JSR
             {
-                uint8_t Low = Read(ProgramCounter);
+                Low = Read(ProgramCounter);
                 ProgramCounter++;
-                uint8_t High = Read(ProgramCounter);
+                High = Read(ProgramCounter);
                 Push(ProgramCounter >> 8);  //Push PCH
                 Push(static_cast<uint8_t>(ProgramCounter)); //Push PCL
                 ProgramCounter = (High << 8) | Low;
                 cycle = 0;
                 break;
             }
+            case 0x4C: //JMP
+                Low = Read(ProgramCounter);
+                ProgramCounter++;
+                High = Read(ProgramCounter);
+                ProgramCounter = (High << 8) | Low;
+                cycle = 0;
+                break;
             case 0x60: //RTS
             {
-                uint8_t Low = Pull();
-                uint8_t High = Pull();
+                Low = Pull();
+                High = Pull();
                 ProgramCounter = (High << 8) | Low;
                 ProgramCounter++;
                 cycle = 0;
@@ -278,18 +288,18 @@ void Emulate_CPU() {
                 cycle = 0;
                 break;
             case 0xA4: { //LDY Zero Page
-                uint8_t Addr = Read(ProgramCounter);
+                Temp = Read(ProgramCounter);
                 ProgramCounter++;
-                Y = Read(Addr);
+                Y = Read(Temp);
                 flag_Zero = Y == 0;
                 flag_Negative = Y > 127;
                 cycle = 0;
                 break;
             }
             case 0xAC: { //LDY Absolute
-                uint8_t Low = Read(ProgramCounter);
+                Low = Read(ProgramCounter);
                 ProgramCounter++;
-                uint8_t High = Read(ProgramCounter);
+                High = Read(ProgramCounter);
                 ProgramCounter++;
                 Y = Read((High << 8) | Low);
                 flag_Zero = Y == 0;
@@ -305,18 +315,18 @@ void Emulate_CPU() {
                 cycle = 0;
                 break;
             case 0xA6: { //LDX Zero Page
-                uint8_t Addr = Read(ProgramCounter);
+                Temp = Read(ProgramCounter);
                 ProgramCounter++;
-                X = Read(Addr);
+                X = Read(Temp);
                 flag_Zero = X == 0;
                 flag_Negative = X > 127;
                 cycle = 0;
                 break;
             }
             case 0xAE: { //LDX Absolute
-                uint8_t Low = Read(ProgramCounter);
+                Low = Read(ProgramCounter);
                 ProgramCounter++;
-                uint8_t High = Read(ProgramCounter);
+                High = Read(ProgramCounter);
                 ProgramCounter++;
                 X = Read((High << 8) | Low);
                 flag_Zero = X == 0;
@@ -332,18 +342,18 @@ void Emulate_CPU() {
                 cycle = 0;
                 break;
             case 0xA5: { //LDA Zero Page
-                uint8_t Addr = Read(ProgramCounter);
+                Temp = Read(ProgramCounter);
                 ProgramCounter++;
-                A = Read(Addr);
+                A = Read(Temp);
                 flag_Zero = A == 0;
                 flag_Negative = A > 127;
                 cycle = 0;
                 break;
             }
             case 0xAD: { //LDA Absolute
-                uint8_t Low = Read(ProgramCounter);
+                Low = Read(ProgramCounter);
                 ProgramCounter++;
-                uint8_t High = Read(ProgramCounter);
+                High = Read(ProgramCounter);
                 ProgramCounter++;
                 A = Read((High << 8) | Low);
                 flag_Zero = A == 0;
@@ -351,8 +361,7 @@ void Emulate_CPU() {
                 cycle = 0;
                 break;
             }
-            case 0x85: {
-                //STA Zero Page
+            case 0x85: {    //STA Zero Page
                 uint8_t Temp = Read(ProgramCounter);
                 ProgramCounter++;
                 Write(Temp, A);
@@ -361,47 +370,43 @@ void Emulate_CPU() {
             }
             case 0x8D: //STA Absolute
                 {
-                uint8_t Temp_Low = Read(ProgramCounter);
+                Low = Read(ProgramCounter);
                 ProgramCounter++;
-                uint8_t Temp_High = Read(ProgramCounter);
+                High = Read(ProgramCounter);
                 ProgramCounter++;
-                Write((Temp_High << 8) | Temp_Low, A);
+                Write((High << 8) | Low, A);
                 cycle = 0;
                 break;
             }
-            case 0x86: {
-                //STX Zero Page
-                uint8_t Temp = Read(ProgramCounter);
+            case 0x86: {    //STX Zero Page
+                Temp = Read(ProgramCounter);
                 ProgramCounter++;
                 Write(Temp, X);
                 cycle = 0;
                 break;
             }
-            case 0x8E: {
-                //STX Absolute
-                uint8_t Temp_Low = Read(ProgramCounter);
+            case 0x8E: {    //STX Absolute
+                Low = Read(ProgramCounter);
                 ProgramCounter++;
-                uint8_t Temp_High = Read(ProgramCounter);
+                High = Read(ProgramCounter);
                 ProgramCounter++;
-                Write((Temp_High << 8) | Temp_Low, X);
+                Write((High << 8) | Low, X);
                 cycle = 0;
                 break;
             }
-            case 0x84: {
-                //STY Zero Page
-                uint8_t Temp = Read(ProgramCounter);
+            case 0x84: {    //STY Zero Page
+                Temp = Read(ProgramCounter);
                 ProgramCounter++;
                 Write(Temp, Y);
                 cycle = 0;
                 break;
             }
-            case 0x8C: {
-                //STY Absolute
-                uint8_t Temp_Low = Read(ProgramCounter);
+            case 0x8C: {    //STY Absolute
+                Low = Read(ProgramCounter);
                 ProgramCounter++;
-                uint8_t Temp_High = Read(ProgramCounter);
+                High = Read(ProgramCounter);
                 ProgramCounter++;
-                Write((Temp_High << 8) | Temp_Low, Y);
+                Write((High << 8) | Low, Y);
                 cycle = 0;
                 break;
             }
