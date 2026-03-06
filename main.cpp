@@ -26,7 +26,8 @@ std::array<uint8_t, 0x8000> ROM{};
 std::array<uint8_t, 0x10> Header{};
 
 
-std::string filepath = "/home/felipe/CLionProjects/BugEmu/test_roms/4_TheStack.nes";
+//std::string filepath = "/home/felipe/CLionProjects/BugEmu/test_roms/4_TheStack.nes";
+std::string filepath = "C:/Users/felip/CLionProjects/BugEmu/test_roms/5_Instructions1.nes";
 
 bool CPU_Halted = false;
 
@@ -104,11 +105,14 @@ void Run() {
 
 int cycle = 0;
 uint8_t opcode;
+uint8_t Low;
+uint8_t High;
+uint8_t Temp;
+int cycles;
+
+//TODO: Add way to check if high byte of PC has changed thus requiring one more CPU Cycle (page crossing)
 
 void Emulate_CPU() {
-    uint8_t Temp;
-    uint8_t High;
-    uint8_t Low;
     if (cycle == 0) {
         opcode = Read(ProgramCounter);
         ProgramCounter++;
@@ -121,7 +125,7 @@ void Emulate_CPU() {
                 ProgramCounter++;
                 cycle = 0;
                 break;
-            case 0x10: // BPL, Branch on Plus TODO: Add way to check if high byte of PC has changed thus requiring one more CPU Cycle
+            case 0x10: // BPL, Branch on Plus
             {
                 Temp = Read(ProgramCounter);
                 ProgramCounter++;
@@ -264,7 +268,7 @@ void Emulate_CPU() {
                 cycle = 0;
                 break;
             }
-            case 0x4C: //JMP
+            case 0x4C: //JMP (absolute addressing)
                 Low = Read(ProgramCounter);
                 ProgramCounter++;
                 High = Read(ProgramCounter);
@@ -362,7 +366,7 @@ void Emulate_CPU() {
                 break;
             }
             case 0x85: {    //STA Zero Page
-                uint8_t Temp = Read(ProgramCounter);
+                Temp = Read(ProgramCounter);
                 ProgramCounter++;
                 Write(Temp, A);
                 cycle = 0;
@@ -383,6 +387,7 @@ void Emulate_CPU() {
                 ProgramCounter++;
                 Write(Temp, X);
                 cycle = 0;
+                cycles = 3;
                 break;
             }
             case 0x8E: {    //STX Absolute
@@ -392,6 +397,7 @@ void Emulate_CPU() {
                 ProgramCounter++;
                 Write((High << 8) | Low, X);
                 cycle = 0;
+                cycles = 4;
                 break;
             }
             case 0x84: {    //STY Zero Page
@@ -399,6 +405,7 @@ void Emulate_CPU() {
                 ProgramCounter++;
                 Write(Temp, Y);
                 cycle = 0;
+                cycles = 3;
                 break;
             }
             case 0x8C: {    //STY Absolute
@@ -408,8 +415,116 @@ void Emulate_CPU() {
                 ProgramCounter++;
                 Write((High << 8) | Low, Y);
                 cycle = 0;
+                cycles = 4;
                 break;
             }
+            case 0xE8:   //INX
+                X++;
+                flag_Zero = X == 0;
+                flag_Negative = X > 127;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0xCA:   //DEX
+                X--;
+                flag_Zero = X == 0;
+                flag_Negative = X > 127;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0xC8:   //INY
+                Y++;
+                flag_Zero = Y == 0;
+                flag_Negative = Y > 127;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0x88:   //DEY
+                Y--;
+                flag_Zero = Y == 0;
+                flag_Negative = Y > 127;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0xAA:  //TAX
+                X = A;
+                flag_Zero = X == 0;
+                flag_Negative = X > 127;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0x8A:  //TXA
+                A = X;
+                flag_Zero = A == 0;
+                flag_Negative = A > 127;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0xA8:  //TAY
+                Y = A;
+                flag_Zero = Y == 0;
+                flag_Negative = Y > 127;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0x98:  //TYA
+                A = Y;
+                flag_Zero = A == 0;
+                flag_Negative = A > 127;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0x9A:  //TXS
+                stackPointer = X;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0xBA:  //TSX
+                X = stackPointer;
+                flag_Zero = X == 0;
+                flag_Negative = X > 127;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0x38: //SEC
+                flag_Carry = true;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0x18:  //CLC
+                flag_Carry = false;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0xB8:  //CLV
+                flag_Overflow = false;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0x78:  //SEI
+                flag_InterruptDisable = true;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0x58:  //CLI
+                flag_InterruptDisable = false;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0xF8:  //SED
+                flag_Decimal = true;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0xD8:  //CLD
+                flag_Decimal = false;
+                cycle = 0;
+                cycles = 2;
+                break;
+            case 0xEA:  //NOP
+                cycle = 0;
+                cycles = 2;
+                break;
             default:
                 std::cout <<"Unknown opcode: 0x"
                 << std::hex
