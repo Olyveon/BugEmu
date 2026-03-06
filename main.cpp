@@ -525,6 +525,31 @@ void Emulate_CPU() {
                 cycle = 0;
                 cycles = 2;
                 break;
+            case 0x08:  //PHP
+                Temp = 0;
+                Temp += static_cast<uint8_t>(flag_Carry ? 1 : 0);
+                Temp += static_cast<uint8_t>(flag_Zero ? 2 : 0);
+                Temp += static_cast<uint8_t>(flag_InterruptDisable ? 4 : 0);
+                Temp += static_cast<uint8_t>(flag_Decimal ? 8 : 0);
+                Temp += 0x10;
+                Temp += 0x20;
+                Temp += static_cast<uint8_t>(flag_Overflow ? 0x40 : 0);
+                Temp += static_cast<uint8_t>(flag_Overflow ? 0x80 : 0);
+                Push(Temp);
+                cycle = 0;
+                cycles = 3;
+                break;
+            case 0x28:  //PLP
+                Temp = Pull();
+                flag_Carry = (Temp & 1) != 0;
+                flag_Zero = (Temp & 2) != 0;
+                flag_InterruptDisable = (Temp & 4) != 0;
+                flag_Decimal = (Temp & 8) != 0;
+                flag_Overflow = (Temp & 0x40) != 0;
+                flag_Negative = (Temp & 0x80) != 0;
+                cycle = 0;
+                cycles = 3;
+                break;
             default:
                 std::cout <<"Unknown opcode: 0x"
                 << std::hex
