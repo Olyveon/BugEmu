@@ -3,4 +3,6 @@ project(BugEmu)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(BugEmu main.cpp)
+add_executable(BugEmu main.cpp
+        bugCpu.cpp
+        bugCpu.h)
