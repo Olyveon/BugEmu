@@ -40,7 +40,20 @@ public:
 
     bool CPU_Halted = false;
 
+    //System Variables
+    uint16_t PC;            //Program Counter
+    uint8_t A;              // Accumulator
+    uint8_t X;              // X Register
+    uint8_t Y;              // Y Register
+    uint8_t stackPointer;   //Stack Pointer
+    uint8_t opcode;         //Operation Code
+
     void Emulate_CPU();
+
+private:
+    // For easier access for flags
+    uint8_t GetFlag(FLAGS flag);
+    void    setFlag(FLAGS flag, bool value);
 };
 
 
