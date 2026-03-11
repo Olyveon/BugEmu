@@ -189,3 +189,96 @@ uint8_t bugCpu::IZY() {
 		return 1;
 	return 0;
 }
+
+uint8_t bugCpu::fetch() {
+	if (!(opcodes[opcode].addr == &bugCpu::IMM))
+		fetched = Read(addr_abs);
+	return fetched;
+}
+
+uint8_t bugCpu::ADC() {
+	fetch();
+	uint16_t r = (uint16_t)A + (uint16_t)fetched + (uint16_t)getFlag(C);
+	setFlag(C, r > 255);
+	setFlag(Z, (r & 0x00FF) == 0);
+	setFlag(N, r & 0x80);
+	setFlag(O, ((r ^ (uint16_t)fetched) & (r ^ A) & 0x80));
+	A = (uint8_t)r;
+	return 1;
+}
+
+uint8_t bugCpu::AND() {
+	fetch();
+	A &= fetched;
+	setFlag(Z, A == 0);
+	setFlag(N, A > 127);
+	return 1;
+}
+
+uint8_t bugCpu::ASL() {
+	fetch();
+	setFlag(C, fetched & 0x80);
+	fetched = fetched << 1;
+	setFlag(Z, fetched == 0);
+	setFlag(N, fetched & 0x80);
+	if (opcode == 0x0A)
+		A = fetched;
+	else
+		Write(addr_abs, fetched);
+	return 0;
+}
+
+uint8_t bugCpu::BCC() {}
+uint8_t bugCpu::BCS() {}
+uint8_t bugCpu::BEQ() {}
+uint8_t bugCpu::BIT() {}
+uint8_t bugCpu::BMI() {}
+uint8_t bugCpu::BNE() {}
+uint8_t bugCpu::BPL() {}
+uint8_t bugCpu::BRK() {}
+uint8_t bugCpu::BVC() {}
+uint8_t bugCpu::BVS() {}
+uint8_t bugCpu::CLC() {}
+uint8_t bugCpu::CLD() {}
+uint8_t bugCpu::CLI() {}
+uint8_t bugCpu::CLV() {}
+uint8_t bugCpu::CMP() {}
+uint8_t bugCpu::CPX() {}
+uint8_t bugCpu::CPY() {}
+uint8_t bugCpu::DEC() {}
+uint8_t bugCpu::DEX() {}
+uint8_t bugCpu::DEY() {}
+uint8_t bugCpu::EOR() {}
+uint8_t bugCpu::INC() {}
+uint8_t bugCpu::INX() {}
+uint8_t bugCpu::INY() {}
+uint8_t bugCpu::JMP() {}
+uint8_t bugCpu::JSR() {}
+uint8_t bugCpu::LDA() {}
+uint8_t bugCpu::LDX() {}
+uint8_t bugCpu::LDY() {}
+uint8_t bugCpu::LSR() {}
+uint8_t bugCpu::NOP() {}
+uint8_t bugCpu::ORA() {}
+uint8_t bugCpu::PHA() {}
+uint8_t bugCpu::PHP() {}
+uint8_t bugCpu::PLA() {}
+uint8_t bugCpu::PLP() {}
+uint8_t bugCpu::ROL() {}
+uint8_t bugCpu::ROR() {}
+uint8_t bugCpu::RTI() {}
+uint8_t bugCpu::RTS() {}
+uint8_t bugCpu::SBC() {}
+uint8_t bugCpu::SEC() {}
+uint8_t bugCpu::SED() {}
+uint8_t bugCpu::SEI() {}
+uint8_t bugCpu::STA() {}
+uint8_t bugCpu::STX() {}
+uint8_t bugCpu::STY() {}
+uint8_t bugCpu::TAX() {}
+uint8_t bugCpu::TAY() {}
+uint8_t bugCpu::TSX() {}
+uint8_t bugCpu::TXA() {}
+uint8_t bugCpu::TXS() {}
+uint8_t bugCpu::TYA() {}
+uint8_t bugCpu::XXX() {}
