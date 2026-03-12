@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <array>
 #include <string>
+#include <vector>
 
 
 #ifndef BUGEMU_BUGCPU_H
@@ -20,6 +21,8 @@ public:
     //Devices connected to the CPU
     std::array<uint8_t, 0x800> RAM{};
     std::array<uint8_t, 0x8000> ROM{};
+    std::array<uint8_t, 0x10> Header{};
+    std::string filepath;   // Filepath of the ROM connected to the emulator/CPU, can only be changed on main.cpp
 
     // Read and Write
     uint8_t Read(uint16_t address);
@@ -36,19 +39,18 @@ public:
         D = (1 << 3),   //Decimal Mode (not really used)
         B = (1 << 4),   //Break Flag
         U = (1 << 5),   //Unused Flag (signed mode)
-        O = (1 << 6),   //Overflow
+        V = (1 << 6),   //Overflow
         N = (1 << 7),   //Negative Flag
     };
 
     bool CPU_Halted = false;
 
     //System Variables
-    uint16_t PC = 0x0000;           //Program Counter
+    uint16_t PC = 0x0000;           // Program Counter
     uint8_t A = 0x00;               // Accumulator
     uint8_t X = 0x00;               // X Register
     uint8_t Y = 0x00;               // Y Register
-    uint8_t stackPointer = 0x00;    //Stack Pointer
-              //Operation Code
+    uint8_t stackPointer = 0x00;    // Stack Pointer
     uint8_t status = 0x00;          // Status Byte
 
     //Addressing Modes
@@ -71,17 +73,18 @@ public:
     uint8_t ROR();  uint8_t RTI();  uint8_t RTS();  uint8_t SBC();  uint8_t SEC();
     uint8_t SED();  uint8_t SEI();  uint8_t STA();  uint8_t STX();  uint8_t STY();
     uint8_t TAX();  uint8_t TAY();  uint8_t TSX();  uint8_t TXA();  uint8_t TXS();
-    uint8_t TYA();  uint8_t XXX();
+    uint8_t TYA();  uint8_t HLT();  uint8_t XXX();
 
     void clock();
     void reset();
+    std::vector<uint8_t> ReadAllBytes(const std::string& path);
 
     uint8_t fetch();
     uint8_t fetched = 0x00;
 
     uint16_t addr_abs {0};
     uint16_t addr_rel {0};
-    uint8_t opcode = 0x00;
+    uint8_t opcode = 0x00;  //Operation Code
     uint8_t cycles = 0;
 
 private:
