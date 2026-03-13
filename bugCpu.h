@@ -77,6 +77,7 @@ public:
 
     void clock();
     void reset();
+    void run();
     std::vector<uint8_t> ReadAllBytes(const std::string& path);
 
     uint8_t fetch();
@@ -94,8 +95,8 @@ private:
 
     struct Opcode {
         std::string name;
-        uint8_t (bugCpu::*op)() = nullptr;  // pointer to member function
-        uint8_t (bugCpu::*addr)() = nullptr;  // pointer to address mode
+        uint8_t (bugCpu::*op)();  // pointer to member function
+        uint8_t (bugCpu::*addr)();  // pointer to address mode
         uint8_t cycles = 0;
     };
 

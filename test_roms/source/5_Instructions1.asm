@@ -25,11 +25,11 @@ skip:
 	TYA ; A = 2
 	TAX ; X = 2
 	TXS ; Stack pointer = 2.
-	PHP ; Write $3D to $102
+	PHP ; Write $34 to $102
 	SEC ; let's play around with the status flags a bit. This sets the carry flag.
 	SED ; This sets the decimal flag.
 	SEI ; This sets the interrupt flag.
-	PHP ; Write $34 to $102
+	PHP ; Write $3D to $101
 	PLP ; And pull them back off.
 	PLP ; undo all that flag stuff, ha.
 	LDA $101 ; that second PHP should have written to address $101
