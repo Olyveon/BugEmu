@@ -11,30 +11,58 @@ function(include_dependency libName gitURL gitTag)
             GIT_TAG             ${gitTag}
             GIT_SHALLOW         TRUE
             GIT_PROGRESS        TRUE
-
     )
-
     FetchContent_MakeAvailable(${libName})
 endfunction()
 
-# add SDL3 support
+# --- SDL3 ---
 find_package(SDL3 QUIET)
-if (NOT SDL_FOUND)
+if (NOT SDL3_FOUND)
     include_dependency(SDL3 https://github.com/libsdl-org/SDL.git release-3.4.2)
 endif ()
-# set the output directory for built objects.
-# This makes sure that the dynamic library goes into the build directory automatically.
 
+# --- Dear ImGui ---
+FetchContent_Declare(
+        imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG        v1.91.9b
+        GIT_SHALLOW    TRUE
+        GIT_PROGRESS   TRUE
+)
+FetchContent_MakeAvailable(imgui)
 
-add_executable(BugEmu main.cpp
+# ImGui has no CMakeLists.txt, so we build it as an INTERFACE/STATIC lib manually
+add_library(imgui STATIC
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+
+        # SDL3 + SDL_Renderer backend
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp
+)
+
+target_include_directories(imgui PUBLIC
+        ${imgui_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}/backends
+)
+
+target_link_libraries(imgui PUBLIC SDL3::SDL3)
+
+# --- BugEmu executable ---
+add_executable(BugEmu
+        main.cpp
         bugCpu.cpp
-        bugCpu.h)
-
-
+        bugCpu.h
+)
 
 target_compile_definitions(BugEmu PRIVATE SDL_MAIN_USE_CALLBACKS)
 
-target_link_libraries(BugEmu PRIVATE SDL3::SDL3)
+target_link_libraries(BugEmu PRIVATE
+        SDL3::SDL3
+        imgui
+)
 
 if (WIN32)
     add_custom_command(

@@ -38,7 +38,7 @@ public:
         I = (1 << 2),   //Interrupt Disable
         D = (1 << 3),   //Decimal Mode (not really used)
         B = (1 << 4),   //Break Flag
-        U = (1 << 5),   //Unused Flag (signed mode)
+        U = (1 << 5),   //Unused Flag
         V = (1 << 6),   //Overflow
         N = (1 << 7),   //Negative Flag
     };
