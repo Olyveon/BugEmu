@@ -59,6 +59,19 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
+    if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Edit")) {
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Debug")) {
+            ImGui::EndMenu();
+        }
+        ImGui::EndMainMenuBar();
+    }
+
     if (as->show_debug_window) {
         ImGui::Begin("BugEmu Debugger", &as->show_debug_window);
 
