@@ -33,7 +33,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     // Rewritten old main() code
     auto* as = new AppState();
     as->cpu.filepath = "C:/Users/felip/CLionProjects/BugEmu/test_roms/6_Instructions2.nes";
-    as->cpu.reset();
     *appstate = as;
 
     // Configure ImGui
@@ -61,17 +60,27 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
+            ImGui::Text("%s", as->cpu.filepath.c_str());
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Edit")) {
+        if (ImGui::BeginMenu("Emulation")) {
+            if (ImGui::MenuItem("Run")) {
+                as->cpu.run();
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
+            ImGui::Checkbox("Show Debug", &as->show_debug_window);
+            // todo: add log check box to debug window
+            ImGui::Checkbox("Log", &as->cpu.logging);
             ImGui::EndMenu();
         }
         ImGui::EndMainMenuBar();
     }
 
+    // debug window
+    // todo: create new functions for restarting the whole emulator (restarting flags, registers, memory, etc.) to differentiate from reset cpu signal
+    // todo: add QoL for the debug window, make it a sepparate window for easier view
     if (as->show_debug_window) {
         ImGui::Begin("BugEmu Debugger", &as->show_debug_window);
 
@@ -84,8 +93,32 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
         ImGui::Text("X:  0x%02X", as->cpu.X);
         ImGui::Text("Y:  0x%02X", as->cpu.Y);
 
+        if (ImGui::BeginTable("TraceLog", 2, ImGuiTableFlags_Borders |
+                                      ImGuiTableFlags_RowBg   |
+                                      ImGuiTableFlags_ScrollY,
+                                      ImVec2(0, 300))) // fixed height, scrollable
+        {
+            ImGui::TableSetupScrollFreeze(0, 1); // freeze header row
+            ImGui::TableSetupColumn("Disassembly");
+            ImGui::TableSetupColumn("Registers & Flags");
+            ImGui::TableHeadersRow();
+
+            for (const auto& entry : as->cpu.traceLog)
+            {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0); ImGui::Text("%s", entry.disassembly.c_str());
+                ImGui::TableSetColumnIndex(1); ImGui::Text("%s %s Cycle:%d", entry.registers.c_str(), entry.flags.c_str(), entry.cycles);
+            }
+
+            // Auto-scroll to bottom when new entries arrive
+            if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+                ImGui::SetScrollHereY(1.0f);
+
+            ImGui::EndTable();
+        }
+
         ImGui::Separator();
-        if (ImGui::Button("Step Instruction")) {
+        if (ImGui::Button("Run one CPU cycle")) {
             as->cpu.clock();
         }
 

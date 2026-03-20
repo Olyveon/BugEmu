@@ -4,6 +4,7 @@
 #pragma once
 #include <cstdint>
 #include <array>
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -80,6 +81,21 @@ public:
     void run();
     std::vector<uint8_t> ReadAllBytes(const std::string& path);
 
+    // Logger utilities
+    //
+    // I fucking love structs, structs go brr. One entry equals a whole instruction not a clock cycle
+    // The registers and flags are from BEFORE the whole instruction has been executed
+    struct traceEntry {
+        std::string disassembly;    // e.g. "8000: LDA #$FF"
+        std::string registers;      // e.g. "A: 0x12, X: 0xA8, Y: 0x30", todo:maybe add a debugger option to see them as decimal values instead?
+        std::string flags;          // e.g. "NvUBDiZc", capital letters for flags that are set, lowercase for ones that are cleared
+        int cycles;
+    };
+    std::deque<traceEntry> traceLog;
+    bool logging = false;   // we don't want to be always logging, defaults to false
+    size_t MAX_TRACE_LENGTH = 256;    // We need a cap for logging
+
+
     uint8_t fetch();
     uint8_t fetched = 0x00;
 
@@ -87,16 +103,39 @@ public:
     uint16_t addr_rel {0};
     uint8_t opcode = 0x00;  //Operation Code
     uint8_t cycles = 0;
+    int clockCount = 0;
 
 private:
     // For easier access for flags
     uint8_t getFlag(FLAGS flag);
+    uint8_t getFlag(FLAGS flag, uint8_t flags);     // When we don't want to use the ones currently being used (logging)
     void    setFlag(FLAGS flag, bool value);
 
+    // For logging purposes
+    std::string getDisassembly();
+    std::string parseRegisters(uint8_t a, uint8_t x, uint8_t y, uint8_t stckp);
+    std::string parseFlags(uint8_t stat);
+    uint16_t instPC;    // Program counter where the current instruction started, set at the start of said function
+    uint8_t log_a;
+    uint8_t log_x;
+    uint8_t log_y;
+    uint8_t log_sp;
+    uint8_t log_status;
+    uint16_t ind_addr;  // The address used originally for indirect instructions
+
+
+    // enum we need for disassembly
+    enum AddrMode {
+        Imp, Imm, Zp0, ZpX, Abs, Ind,
+        AbX, AbY, Rel, ZpY, IzX, IzY
+    };
+
+    // Opcode struct
     struct Opcode {
         std::string name;
         uint8_t (bugCpu::*op)();  // pointer to member function
         uint8_t (bugCpu::*addr)();  // pointer to address mode
+        AddrMode mode;  // for disassembly purposes
         uint8_t cycles = 0;
     };
 
