@@ -87,7 +87,7 @@ public:
     // The registers and flags are from BEFORE the whole instruction has been executed
     struct traceEntry {
         std::string disassembly;    // e.g. "8000: LDA #$FF"
-        std::string registers;      // e.g. "A: 0x12, X: 0xA8, Y: 0x30", todo:maybe add a debugger option to see them as decimal values instead?
+        std::string registers;      // e.g. "A: 0x12, X: 0xA8, Y: 0x30"
         std::string flags;          // e.g. "NvUBDiZc", capital letters for flags that are set, lowercase for ones that are cleared
         int cycles;
     };

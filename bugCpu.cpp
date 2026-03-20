@@ -96,7 +96,7 @@ void bugCpu::clock() {
 }
 
 // Disassembles the opcode based on its addressing mode and the instruction it calls
-// todo: configure for inderect addressing and tweak others using other emulators as reference
+//
 std::string bugCpu::getDisassembly() {
 	std::string disassem_addr;
 	switch (opcodes[opcode].mode) {

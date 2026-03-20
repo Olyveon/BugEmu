@@ -12,12 +12,18 @@
 
 static SDL_Window *window = nullptr;
 static SDL_Renderer *renderer = nullptr;
+static ImGuiContext* mainContext = nullptr;
+static SDL_Window *traceLoggerWindow = nullptr;
+static SDL_Renderer *traceLoggerRenderer = nullptr;
+static ImGuiContext *traceLoggerContext = nullptr;
+bool show_debug_window = false;
 
 // we use a struct to maintain app state
 struct AppState {
     bugCpu cpu;
-    bool show_debug_window = true;
+
 };
+
 
 /* This function runs once at startup. Replaces main()*/
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
@@ -37,7 +43,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     // Configure ImGui
     IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
+    mainContext = ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
@@ -47,13 +53,53 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer3_Init(renderer);
 
+
     return SDL_APP_CONTINUE;  /* carry on with the program! */
+}
+
+void openDebugWindow() {
+    if (traceLoggerWindow) return;
+
+    traceLoggerWindow = SDL_CreateWindow("Trace Logger", 800, 600, SDL_WINDOW_RESIZABLE);
+    traceLoggerRenderer = SDL_CreateRenderer(traceLoggerWindow, nullptr);
+
+    ImGuiContext* previousContext = ImGui::GetCurrentContext();
+
+    traceLoggerContext = ImGui::CreateContext();
+    ImGui::SetCurrentContext(traceLoggerContext);
+
+    ImGui_ImplSDL3_InitForSDLRenderer(traceLoggerWindow, traceLoggerRenderer);
+    ImGui_ImplSDLRenderer3_Init(traceLoggerRenderer);
+
+    ImGui::SetCurrentContext(previousContext);
+}
+
+void closeDebugWindow(void *appstate) {
+    auto* as = (AppState*)appstate;
+
+    if (!traceLoggerWindow) return;
+
+    ImGui::SetCurrentContext(traceLoggerContext);
+    ImGui_ImplSDLRenderer3_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext(traceLoggerContext);
+
+    SDL_DestroyRenderer(traceLoggerRenderer);
+    SDL_DestroyWindow(traceLoggerWindow);
+
+    traceLoggerWindow   = nullptr;
+    traceLoggerRenderer = nullptr;
+    traceLoggerContext  = nullptr;
+    show_debug_window = false;
+    as->cpu.logging = false;
 }
 
 // This function runs once per frame
 SDL_AppResult SDL_AppIterate(void *appstate) {
     auto* as = (AppState*)appstate;
 
+    // --- Main Window ---
+    ImGui::SetCurrentContext(mainContext);
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
@@ -61,32 +107,61 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             ImGui::Text("%s", as->cpu.filepath.c_str());
+            // todo: add a real file manager
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Emulation")) {
-            if (ImGui::MenuItem("Run")) {
-                as->cpu.run();
-            }
+            if (ImGui::MenuItem("Run")) as->cpu.run();
+            // todo: add emulation functions here like reset, a reload function (it would restart the RAM and ROM and trigger another reset), etc.
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
-            ImGui::Checkbox("Show Debug", &as->show_debug_window);
-            // todo: add log check box to debug window
-            ImGui::Checkbox("Log", &as->cpu.logging);
+            if (ImGui::MenuItem("Trace Logger")) {
+                openDebugWindow();          // only opens if not already open
+                show_debug_window = true;
+                as->cpu.logging = true;
+            }
             ImGui::EndMenu();
         }
         ImGui::EndMainMenuBar();
     }
 
-    // debug window
-    // todo: create new functions for restarting the whole emulator (restarting flags, registers, memory, etc.) to differentiate from reset cpu signal
-    // todo: add QoL for the debug window, make it a sepparate window for easier view
-    if (as->show_debug_window) {
-        ImGui::Begin("BugEmu Debugger", &as->show_debug_window);
+    SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);
+    SDL_RenderClear(renderer);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDebugText(renderer, 180, 100, "Emulator running!!");
 
-        ImGui::Text("Estado de la CPU:");
+    ImGui::Render();
+    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
+    SDL_RenderPresent(renderer);
+
+    // --- Debug Window ---
+    if (show_debug_window && traceLoggerWindow) {
+        ImGui::SetCurrentContext(traceLoggerContext);
+        ImGui_ImplSDLRenderer3_NewFrame();
+        ImGui_ImplSDL3_NewFrame();
+        ImGui::NewFrame();
+
+        // get the SDL window size
+        int w, h;
+        SDL_GetWindowSize(traceLoggerWindow, &w, &h);
+
+        // force imgui window to match it exactly
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2((float)w, (float)h));
+
+        // these flags remove all window decorations so it truly fills the space
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar      |
+                                 ImGuiWindowFlags_NoResize         |
+                                 ImGuiWindowFlags_NoMove           |
+                                 ImGuiWindowFlags_NoScrollbar      |
+                                 ImGuiWindowFlags_NoCollapse       |
+                                 ImGuiWindowFlags_NoBringToFrontOnFocus;;
+
+        ImGui::Begin("BugEmu Debugger", &show_debug_window, flags);
+
+        ImGui::Text("CPU State:");
         ImGui::Separator();
-        // Registers and important data
         ImGui::Text("PC: 0x%04X", as->cpu.PC);
         ImGui::Text("SP: 0x%02X", as->cpu.stackPointer);
         ImGui::Text("A:  0x%02X", as->cpu.A);
@@ -94,23 +169,21 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
         ImGui::Text("Y:  0x%02X", as->cpu.Y);
 
         if (ImGui::BeginTable("TraceLog", 2, ImGuiTableFlags_Borders |
-                                      ImGuiTableFlags_RowBg   |
-                                      ImGuiTableFlags_ScrollY,
-                                      ImVec2(0, 300))) // fixed height, scrollable
+                                             ImGuiTableFlags_RowBg   |
+                                             ImGuiTableFlags_ScrollY,
+                                             ImVec2(0, 300)))
         {
-            ImGui::TableSetupScrollFreeze(0, 1); // freeze header row
+            ImGui::TableSetupScrollFreeze(0, 1);
             ImGui::TableSetupColumn("Disassembly");
             ImGui::TableSetupColumn("Registers & Flags");
             ImGui::TableHeadersRow();
 
-            for (const auto& entry : as->cpu.traceLog)
-            {
+            for (const auto& entry : as->cpu.traceLog) {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0); ImGui::Text("%s", entry.disassembly.c_str());
                 ImGui::TableSetColumnIndex(1); ImGui::Text("%s %s Cycle:%d", entry.registers.c_str(), entry.flags.c_str(), entry.cycles);
             }
 
-            // Auto-scroll to bottom when new entries arrive
             if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
                 ImGui::SetScrollHereY(1.0f);
 
@@ -118,50 +191,86 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
         }
 
         ImGui::Separator();
-        if (ImGui::Button("Run one CPU cycle")) {
-            as->cpu.clock();
-        }
-
-        if (ImGui::Button("Reset")) {
-            as->cpu.reset();
-        }
+        if (ImGui::Button("Run one CPU cycle")) as->cpu.clock();
+        if (ImGui::Button("Reset"))             as->cpu.reset();
 
         ImGui::End();
+
+        if (!show_debug_window)
+            closeDebugWindow(appstate);
+        else {
+            ImGui::Render();
+            SDL_SetRenderDrawColor(traceLoggerRenderer, 30, 30, 30, 255);
+            SDL_RenderClear(traceLoggerRenderer);
+            ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), traceLoggerRenderer);
+            SDL_RenderPresent(traceLoggerRenderer);
+        }
+
+
     }
-
-    SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);
-    SDL_RenderClear(renderer);
-
-    // Here would go NES PPU frame
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_RenderDebugText(renderer, 180, 100, "Emulator running!!");
-
-    ImGui::Render();
-    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
-
-    SDL_RenderPresent(renderer);
 
     return SDL_APP_CONTINUE;
 }
+
 
 // This function runs once when the window quits
 void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     // SDL will take care of the window/render, any other things that we need to destroy, do it here
 }
 
-SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
-    // Send events to ImGui too
-    ImGui_ImplSDL3_ProcessEvent(event);
+SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
+    AppState* state = (AppState*)appstate;
 
+    // handle window close for both windows
+    if (event->type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+        if (event->window.windowID == SDL_GetWindowID(window))
+            return SDL_APP_SUCCESS; // exits the app
+
+        if (traceLoggerWindow &&
+            event->window.windowID == SDL_GetWindowID(traceLoggerWindow))
+        {
+            closeDebugWindow(state);
+            return SDL_APP_CONTINUE;
+        }
+    }
+
+    // route imgui events to the correct context based on which window they came from
+    uint32_t eventWindowID = 0;
+
+    // extract windowID depending on event type
     switch (event->type) {
-        case SDL_EVENT_QUIT:
-            // end the program, reporting success to the OS
-            return SDL_APP_SUCCESS;
+        case SDL_EVENT_MOUSE_MOTION:
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+        case SDL_EVENT_MOUSE_WHEEL:
+            eventWindowID = event->motion.windowID;
+            break;
         case SDL_EVENT_KEY_DOWN:
-            if (event->key.key == SDLK_ESCAPE)
-            return SDL_APP_SUCCESS;
+        case SDL_EVENT_KEY_UP:
+        case SDL_EVENT_TEXT_INPUT:
+            eventWindowID = event->key.windowID;
+            break;
         default:
             break;
+    }
+
+    if (traceLoggerWindow &&
+        eventWindowID == SDL_GetWindowID(traceLoggerWindow))
+    {
+        // route to debug imgui context
+        ImGui::SetCurrentContext(traceLoggerContext);
+        ImGui_ImplSDL3_ProcessEvent(event);
+    } else {
+        // route to main imgui context
+        ImGui::SetCurrentContext(mainContext);
+        ImGui_ImplSDL3_ProcessEvent(event);
+    }
+
+    // handle  game inputs here (only for main window)
+    if (!traceLoggerWindow ||
+        eventWindowID != SDL_GetWindowID(traceLoggerWindow))
+    {
+        // normal game input handling
     }
 
     return SDL_APP_CONTINUE;
