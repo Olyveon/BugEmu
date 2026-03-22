@@ -85,11 +85,15 @@ public:
     //
     // I fucking love structs, structs go brr. One entry equals a whole instruction not a clock cycle
     // The registers and flags are from BEFORE the whole instruction has been executed
+    // The disassembly was divided for easier use of tooltips with ImGui
     struct traceEntry {
-        std::string disassembly;    // e.g. "8000: LDA #$FF"
+        uint16_t programCounter; // e.g. "8000:"
+        std::string instruction;    // e.g. "LDA"
+        std::string operand;        // e.g. "#FF or ($8000) = $ 0A"
         std::string registers;      // e.g. "A: 0x12, X: 0xA8, Y: 0x30"
         std::string flags;          // e.g. "NvUBDiZc", capital letters for flags that are set, lowercase for ones that are cleared
         int cycles;
+        uint8_t opcode;             // to be used on tooltip
     };
     std::deque<traceEntry> traceLog;
     bool logging = false;   // we don't want to be always logging, defaults to false
@@ -112,7 +116,7 @@ private:
     void    setFlag(FLAGS flag, bool value);
 
     // For logging purposes
-    std::string getDisassembly();
+    std::string getDisassemblyOperand();
     std::string parseRegisters(uint8_t a, uint8_t x, uint8_t y, uint8_t stckp);
     std::string parseFlags(uint8_t stat);
     uint16_t instPC;    // Program counter where the current instruction started, set at the start of said function

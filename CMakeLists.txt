@@ -37,6 +37,7 @@ add_library(imgui STATIC
         ${imgui_SOURCE_DIR}/imgui_draw.cpp
         ${imgui_SOURCE_DIR}/imgui_tables.cpp
         ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+        ${imgui_SOURCE_DIR}/imgui_demo.cpp
 
         # SDL3 + SDL_Renderer backend
         ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp

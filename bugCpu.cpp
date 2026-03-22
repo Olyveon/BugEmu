@@ -83,7 +83,10 @@ void bugCpu::clock() {
 		// Logging
 		if (logging) {
 			traceEntry entry;
-			entry.disassembly = getDisassembly();
+			entry.programCounter = instPC;
+			entry.opcode = opcode;
+			entry.instruction = opcodes[opcode].name;
+			entry.operand = getDisassemblyOperand();
 			entry.registers = parseRegisters(log_a, log_x, log_y, log_sp);
 			entry.flags = parseFlags(log_status);
 			entry.cycles = clockCount;
@@ -95,52 +98,49 @@ void bugCpu::clock() {
 	cycles--;
 }
 
-// Disassembles the opcode based on its addressing mode and the instruction it calls
-//
-std::string bugCpu::getDisassembly() {
-	std::string disassem_addr;
+// Disassembles the opcode's operand based on its addressing mode
+// I changed it to this to add custom tooltips
+std::string bugCpu::getDisassemblyOperand() {
+	std::string disassembly_operand;
 	switch (opcodes[opcode].mode) {
 		case Imp:
-			disassem_addr = " ";
+			disassembly_operand = " ";
 			break;
 		case Imm:
-			disassem_addr = std::format("#{:02X}", fetched);	// Technically the convention would be to put a $ before the value, but it honestly looks bad and that's the only reason I won't use it :)
+			disassembly_operand = std::format("#{:02X}", fetched);	// Technically the convention would be to put a $ before the value, but it honestly looks bad and that's the only reason I won't use it :)
 			break;
 		case Abs:
-			disassem_addr = std::format("${:04X}", addr_abs);
+			disassembly_operand = std::format("${:04X}", addr_abs);
 			break;
 		case Zp0:
-			disassem_addr = std::format("${:02X}", Read(instPC + 1));
+			disassembly_operand = std::format("${:02X}", Read(instPC + 1));
 			break;
 		case Rel:
-			disassem_addr = std::format("${:04X}", addr_abs);
+			disassembly_operand = std::format("${:04X}", addr_abs);
 			break;
 		case ZpX:
-			disassem_addr = std::format("${:02X}, X [${:04X}] = ${:02X}", Read(instPC + 1), addr_abs, Read(addr_abs));
+			disassembly_operand = std::format("${:02X}, X [${:04X}] = ${:02X}", Read(instPC + 1), addr_abs, Read(addr_abs));
 			break;
 		case ZpY:
-			disassem_addr = std::format("${:02X}, Y [${:04X}] = ${:02X}", Read(instPC + 1), addr_abs, Read(addr_abs));
+			disassembly_operand = std::format("${:02X}, Y [${:04X}] = ${:02X}", Read(instPC + 1), addr_abs, Read(addr_abs));
 			break;
 		case AbX:
-			disassem_addr = std::format("${:04X}, X", addr_abs);
+			disassembly_operand = std::format("${:04X}, X", addr_abs);
 			break;
 		case AbY:
-			disassem_addr = std::format("${:04X}, Y", addr_abs);
+			disassembly_operand = std::format("${:04X}, Y", addr_abs);
 			break;
 		case Ind:
-			disassem_addr = std::format("(${:04X}) = ${:04X}", ind_addr, addr_abs);
+			disassembly_operand = std::format("(${:04X}) = ${:04X}", ind_addr, addr_abs);
 			break;
 		case IzX:
-			disassem_addr = std::format("(${:04X}, X) = ${:04X}", Read(instPC+1), addr_abs);
+			disassembly_operand = std::format("(${:04X}, X) = ${:04X}", Read(instPC+1), addr_abs);
 			break;
 		case IzY:
-			disassem_addr = std::format("(${:04X}), Y = ${:04X}", Read(instPC+1), addr_abs);
+			disassembly_operand = std::format("(${:04X}), Y = ${:04X}", Read(instPC+1), addr_abs);
 			break;
-
-
 	}
-	std::string disassembly = std::format("{:X}: {:02X} {} {}",instPC, opcode, opcodes[opcode].name, disassem_addr);
-	return disassembly;
+	return disassembly_operand;
 }
 
 std::string bugCpu::parseRegisters(uint8_t a, uint8_t x, uint8_t y, uint8_t sp) {

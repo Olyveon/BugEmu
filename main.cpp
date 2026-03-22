@@ -8,6 +8,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
+#include "cmake-build-release/_deps/imgui-src/imgui_internal.h"
 
 
 static SDL_Window *window = nullptr;
@@ -32,7 +33,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
-    if (!SDL_CreateWindowAndRenderer("BugEmu", 1024, 768, 0, &window, &renderer)) {
+    if (!SDL_CreateWindowAndRenderer("BugEmu", 1024, 768, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
         return SDL_APP_FAILURE;
     }
 
@@ -94,15 +95,8 @@ void closeDebugWindow(void *appstate) {
     as->cpu.logging = false;
 }
 
-// This function runs once per frame
-SDL_AppResult SDL_AppIterate(void *appstate) {
+void renderMain(void *appstate) {
     auto* as = (AppState*)appstate;
-
-    // --- Main Window ---
-    ImGui::SetCurrentContext(mainContext);
-    ImGui_ImplSDLRenderer3_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    ImGui::NewFrame();
 
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
@@ -125,11 +119,86 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
         }
         ImGui::EndMainMenuBar();
     }
-
-    SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255);
+    SDL_SetRenderDrawColor(renderer, 255, 90, 100, 255);
     SDL_RenderClear(renderer);
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderDebugText(renderer, 180, 100, "Emulator running!!");
+}
+
+void renderDebug(void *appstate) {
+    auto* as = (AppState*)appstate;
+
+    // get the SDL window size
+    int w, h;
+    SDL_GetWindowSize(traceLoggerWindow, &w, &h);
+
+    // force imgui window to match it exactly
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2((float)w, (float)h));
+
+    // these flags remove all window decorations so it truly fills the space
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar      |
+                                 ImGuiWindowFlags_NoResize         |
+                                 ImGuiWindowFlags_NoMove           |
+                                 ImGuiWindowFlags_NoScrollbar      |
+                                 ImGuiWindowFlags_NoCollapse       |
+                                 ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+    ImGui::Begin("BugEmu Debugger", &show_debug_window, flags);
+
+
+    ImGui::Text("CPU State:");
+    ImGui::Separator();
+    ImGui::Text("PC: 0x%04X", as->cpu.PC);
+    ImGui::Text("SP: 0x%02X", as->cpu.stackPointer);
+    ImGui::Text("A:  0x%02X", as->cpu.A);
+    ImGui::Text("X:  0x%02X", as->cpu.X);
+    ImGui::Text("Y:  0x%02X", as->cpu.Y);
+
+    if (ImGui::BeginTable("TraceLog", 2, ImGuiTableFlags_Borders |
+                                             ImGuiTableFlags_RowBg   |
+                                             ImGuiTableFlags_ScrollY,
+                                             ImVec2(0, 300)))
+    {
+        ImGui::TableSetupScrollFreeze(0, 1);
+        ImGui::TableSetupColumn("Disassembly");
+        ImGui::TableSetupColumn("Registers & Flags");
+        ImGui::TableHeadersRow();
+
+        for (const auto& entry : as->cpu.traceLog) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::Text("%X:", entry.programCounter);
+            ImGui::SameLine(); ImGui::Text("%s", entry.instruction.c_str());
+            ImGui::SetItemTooltip("Opcode: $%X", entry.opcode);      // We make the table easier to read, but we still have the same information available if necessary
+            ImGui::SameLine(); ImGui::Text("%s",entry.operand.c_str());
+            ImGui::TableSetColumnIndex(1); ImGui::Text("%s %s Cycle:%d", entry.registers.c_str(), entry.flags.c_str(), entry.cycles);
+        }
+
+        if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+            ImGui::SetScrollHereY(1.0f);
+
+        ImGui::EndTable();
+        }
+
+        ImGui::Separator();
+        if (ImGui::Button("Run one CPU cycle")) as->cpu.clock();
+        if (ImGui::Button("Reset"))             as->cpu.reset();
+
+        ImGui::End();
+
+}
+
+// This function runs once per frame
+SDL_AppResult SDL_AppIterate(void *appstate) {
+    auto* as = (AppState*)appstate;
+
+    // --- Main Window ---
+    ImGui::SetCurrentContext(mainContext);
+    ImGui_ImplSDLRenderer3_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+
+    renderMain(appstate);
 
     ImGui::Render();
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
@@ -142,59 +211,8 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
 
-        // get the SDL window size
-        int w, h;
-        SDL_GetWindowSize(traceLoggerWindow, &w, &h);
+        renderDebug(appstate);
 
-        // force imgui window to match it exactly
-        ImGui::SetNextWindowPos(ImVec2(0, 0));
-        ImGui::SetNextWindowSize(ImVec2((float)w, (float)h));
-
-        // these flags remove all window decorations so it truly fills the space
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar      |
-                                 ImGuiWindowFlags_NoResize         |
-                                 ImGuiWindowFlags_NoMove           |
-                                 ImGuiWindowFlags_NoScrollbar      |
-                                 ImGuiWindowFlags_NoCollapse       |
-                                 ImGuiWindowFlags_NoBringToFrontOnFocus;;
-
-        ImGui::Begin("BugEmu Debugger", &show_debug_window, flags);
-
-        ImGui::Text("CPU State:");
-        ImGui::Separator();
-        ImGui::Text("PC: 0x%04X", as->cpu.PC);
-        ImGui::Text("SP: 0x%02X", as->cpu.stackPointer);
-        ImGui::Text("A:  0x%02X", as->cpu.A);
-        ImGui::Text("X:  0x%02X", as->cpu.X);
-        ImGui::Text("Y:  0x%02X", as->cpu.Y);
-
-        if (ImGui::BeginTable("TraceLog", 2, ImGuiTableFlags_Borders |
-                                             ImGuiTableFlags_RowBg   |
-                                             ImGuiTableFlags_ScrollY,
-                                             ImVec2(0, 300)))
-        {
-            ImGui::TableSetupScrollFreeze(0, 1);
-            ImGui::TableSetupColumn("Disassembly");
-            ImGui::TableSetupColumn("Registers & Flags");
-            ImGui::TableHeadersRow();
-
-            for (const auto& entry : as->cpu.traceLog) {
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0); ImGui::Text("%s", entry.disassembly.c_str());
-                ImGui::TableSetColumnIndex(1); ImGui::Text("%s %s Cycle:%d", entry.registers.c_str(), entry.flags.c_str(), entry.cycles);
-            }
-
-            if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
-                ImGui::SetScrollHereY(1.0f);
-
-            ImGui::EndTable();
-        }
-
-        ImGui::Separator();
-        if (ImGui::Button("Run one CPU cycle")) as->cpu.clock();
-        if (ImGui::Button("Reset"))             as->cpu.reset();
-
-        ImGui::End();
 
         if (!show_debug_window)
             closeDebugWindow(appstate);
