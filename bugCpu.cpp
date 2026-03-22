@@ -3,6 +3,7 @@
 //
 
 #include "bugCpu.h"
+#include "bugNES.h"
 
 #include <cstring>
 #include <format>
@@ -35,27 +36,11 @@ bugCpu::bugCpu() = default;
 bugCpu::~bugCpu()= default;
 
 uint8_t bugCpu::Read(uint16_t address) {
-	if (address < 0x800) {
-		return RAM[address];
-	}
-	if (address <= 0x1FFF) {
-		constexpr uint16_t MASK = 0x7FF;
-		return RAM[address & MASK];
-	}
-	if (address >= 0x8000) {
-		return ROM[address - 0x8000];
-	}
-	return 0;
+	return nes->cpuRead(address);
 }
 
 void bugCpu::Write(uint16_t address, uint8_t value) {
-	if (address < 0x800) {
-		RAM[address] = value;
-	}
-	if (address <= 0x1FFF) {
-		constexpr uint16_t MASK = 0x7FF;
-		RAM[address & MASK] = value;
-	}
+	nes->cpuWrite(address, value);
 }
 
 void bugCpu::clock() {
@@ -192,9 +177,6 @@ std::vector<uint8_t> bugCpu::ReadAllBytes(const std::string& path)
 }
 
 void bugCpu::reset() {
-	auto HeaderedROM = ReadAllBytes(filepath);
-	std::memcpy(ROM.data(), HeaderedROM.data() + 0x10, 0x8000);
-	std::memcpy(Header.data(), HeaderedROM.data() + 0x10, 0x10);
 	uint8_t PCL = Read(0xFFFC);
 	uint8_t PCH = Read(0xFFFD);
 	PC = (PCH << 8) | PCL;

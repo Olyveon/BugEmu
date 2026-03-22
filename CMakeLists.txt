@@ -62,6 +62,12 @@ add_executable(BugEmu
         main.cpp
         bugCpu.cpp
         bugCpu.h
+        bugPpu.cpp
+        bugPpu.h
+        bugNES.cpp
+        bugNES.h
+        bugCartridge.cpp
+        bugCartridge.h
 )
 
 target_compile_definitions(BugEmu PRIVATE SDL_MAIN_USE_CALLBACKS)

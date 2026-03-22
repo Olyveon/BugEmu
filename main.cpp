@@ -1,6 +1,6 @@
 #include <iostream>
 #include <string>
-#include"bugCpu.h"
+#include "bugCpu.h"
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
@@ -14,6 +14,8 @@
 #include <filesystem>
 #include <format>
 
+#include "bugNES.h"
+
 
 static SDL_Window *window = nullptr;
 static SDL_Renderer *renderer = nullptr;
@@ -25,7 +27,7 @@ bool show_debug_window = false;
 
 // we use a struct to maintain app state
 struct AppState {
-    bugCpu cpu;
+    bugNES nes;
 };
 
 // We use Native File Dialog for our file needs
@@ -118,7 +120,7 @@ void closeDebugWindow(void *appstate) {
     traceLoggerRenderer = nullptr;
     traceLoggerContext  = nullptr;
     show_debug_window = false;
-    as->cpu.logging = false;
+    as->nes.cpu.logging = false;
 }
 
 void renderMain(void *appstate) {
@@ -129,10 +131,11 @@ void renderMain(void *appstate) {
             if (ImGui::MenuItem("Open..")) {
                 char* filepath = openFile();
                 if (filepath) {
-                    as->cpu.filepath = filepath;
-                    std::string new_title = std::format("BugEmu - {}", std::filesystem::path(as->cpu.filepath).stem().string());
+                    as->nes.cart.filepath = filepath;
+                    std::string new_title = std::format("BugEmu - {}", std::filesystem::path(as->nes.cart.filepath).stem().string());
                     SDL_SetWindowTitle(window, new_title.c_str());
-                    as->cpu.reload();
+                    as->nes.cart.insertCartridge();
+                    as->nes.cpu.reload();
                     // as->cpu.run();
                 }
 
@@ -140,15 +143,15 @@ void renderMain(void *appstate) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Emulation")) {
-            if (ImGui::MenuItem("Run")) as->cpu.run();
-            if (ImGui::MenuItem("Reload")) as->cpu.reload();
+            if (ImGui::MenuItem("Run")) as->nes.cpu.run();
+            if (ImGui::MenuItem("Reload")) as->nes.cpu.reload();
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
             if (ImGui::MenuItem("Trace Logger")) {
                 openDebugWindow();          // only opens if not already open
                 show_debug_window = true;
-                as->cpu.logging = true;
+                as->nes.cpu.logging = true;
             }
             ImGui::EndMenu();
         }
@@ -185,11 +188,11 @@ void renderDebug(void *appstate) {
 
     ImGui::Text("CPU State:");
     ImGui::Separator();
-    ImGui::Text("PC: 0x%04X", as->cpu.PC);
-    ImGui::Text("SP: 0x%02X", as->cpu.stackPointer);
-    ImGui::Text("A:  0x%02X", as->cpu.A);
-    ImGui::Text("X:  0x%02X", as->cpu.X);
-    ImGui::Text("Y:  0x%02X", as->cpu.Y);
+    ImGui::Text("PC: 0x%04X", as->nes.cpu.PC);
+    ImGui::Text("SP: 0x%02X", as->nes.cpu.stackPointer);
+    ImGui::Text("A:  0x%02X", as->nes.cpu.A);
+    ImGui::Text("X:  0x%02X", as->nes.cpu.X);
+    ImGui::Text("Y:  0x%02X", as->nes.cpu.Y);
 
     if (ImGui::BeginTable("TraceLog", 2, ImGuiTableFlags_Borders |
                                              ImGuiTableFlags_RowBg   |
@@ -201,7 +204,7 @@ void renderDebug(void *appstate) {
         ImGui::TableSetupColumn("Registers & Flags");
         ImGui::TableHeadersRow();
 
-        for (const auto& entry : as->cpu.traceLog) {
+        for (const auto& entry : as->nes.cpu.traceLog) {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0); ImGui::Text("%X:", entry.programCounter);
             ImGui::SameLine(); ImGui::Text("%s", entry.instruction.c_str());
@@ -217,9 +220,9 @@ void renderDebug(void *appstate) {
         }
 
     ImGui::Separator();
-    if (ImGui::Button("Run one CPU cycle")) as->cpu.clock();
-    if (ImGui::Button("Reset"))             as->cpu.reset();
-    if (ImGui::Button("Continue until next instruction")) as->cpu.continue_instruction();
+    if (ImGui::Button("Run one CPU cycle")) as->nes.cpu.clock();
+    if (ImGui::Button("Reset"))             as->nes.cpu.reset();
+    if (ImGui::Button("Continue until next instruction")) as->nes.cpu.continue_instruction();
 
     ImGui::End();
 

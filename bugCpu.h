@@ -11,7 +11,7 @@
 
 #ifndef BUGEMU_BUGCPU_H
 #define BUGEMU_BUGCPU_H
-
+class bugNES;
 
 class bugCpu
 {
@@ -20,6 +20,7 @@ public:
     ~bugCpu();
 
     //Devices connected to the CPU
+    void ConnectSystem(bugNES *n) { nes = n; }
     std::array<uint8_t, 0x800> RAM{};
     std::array<uint8_t, 0x8000> ROM{};
     std::array<uint8_t, 0x10> Header{};
@@ -128,7 +129,7 @@ private:
     uint8_t log_status {};
     uint16_t ind_addr {};  // The address used originally for indirect instructions
 
-
+    bugNES *nes = nullptr;
     // enum we need for disassembly
     enum AddrMode {
         Imp, Imm, Zp0, ZpX, Abs, Ind,
