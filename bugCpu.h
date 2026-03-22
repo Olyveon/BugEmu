@@ -79,6 +79,7 @@ public:
     void clock();
     void reset();
     void run();
+    void reload();
     std::vector<uint8_t> ReadAllBytes(const std::string& path);
 
     // Logger utilities
@@ -98,7 +99,7 @@ public:
     std::deque<traceEntry> traceLog;
     bool logging = false;   // we don't want to be always logging, defaults to false
     size_t MAX_TRACE_LENGTH = 256;    // We need a cap for logging
-
+    void continue_instruction();
 
     uint8_t fetch();
     uint8_t fetched = 0x00;

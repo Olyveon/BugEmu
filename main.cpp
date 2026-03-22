@@ -66,7 +66,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     // Rewritten old main() code
     auto* as = new AppState();
-
     *appstate = as;
 
     // Configure ImGui
@@ -133,7 +132,8 @@ void renderMain(void *appstate) {
                     as->cpu.filepath = filepath;
                     std::string new_title = std::format("BugEmu - {}", std::filesystem::path(as->cpu.filepath).stem().string());
                     SDL_SetWindowTitle(window, new_title.c_str());
-                    // NewRunFunction, this is part of the to do that's a few lines down, it should be a combination of reset and run and possibly something extra to makesure the ram is initialized to 0
+                    as->cpu.reload();
+                    // as->cpu.run();
                 }
 
             }
@@ -141,7 +141,7 @@ void renderMain(void *appstate) {
         }
         if (ImGui::BeginMenu("Emulation")) {
             if (ImGui::MenuItem("Run")) as->cpu.run();
-            // todo: add emulation functions here like reset, a reload function (it would restart the RAM and ROM and trigger another reset), etc.
+            if (ImGui::MenuItem("Reload")) as->cpu.reload();
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -156,8 +156,9 @@ void renderMain(void *appstate) {
     }
     SDL_SetRenderDrawColor(renderer, 255, 90, 100, 255);
     SDL_RenderClear(renderer);
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 100);
     SDL_RenderDebugText(renderer, 180, 100, "Emulator running!!");
+
 }
 
 void renderDebug(void *appstate) {
@@ -215,11 +216,12 @@ void renderDebug(void *appstate) {
         ImGui::EndTable();
         }
 
-        ImGui::Separator();
-        if (ImGui::Button("Run one CPU cycle")) as->cpu.clock();
-        if (ImGui::Button("Reset"))             as->cpu.reset();
+    ImGui::Separator();
+    if (ImGui::Button("Run one CPU cycle")) as->cpu.clock();
+    if (ImGui::Button("Reset"))             as->cpu.reset();
+    if (ImGui::Button("Continue until next instruction")) as->cpu.continue_instruction();
 
-        ImGui::End();
+    ImGui::End();
 
 }
 
@@ -233,7 +235,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
-    renderMain(appstate);
+    renderMain(as);
 
     ImGui::Render();
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
@@ -246,7 +248,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
 
-        renderDebug(appstate);
+        renderDebug(as);
 
 
         if (!show_debug_window)

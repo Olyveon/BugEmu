@@ -98,6 +98,13 @@ void bugCpu::clock() {
 	cycles--;
 }
 
+void bugCpu::continue_instruction() {
+	while (cycles != 0) {
+		clock();
+	}
+	clock();
+}
+
 // Disassembles the opcode's operand based on its addressing mode
 // I changed it to this to add custom tooltips
 std::string bugCpu::getDisassemblyOperand() {
@@ -195,6 +202,19 @@ void bugCpu::reset() {
 	setFlag(U, 1);
 	stackPointer = 0xFD;
 	clockCount += 7;	// it takes 7 cycles for these operations to finish
+}
+
+void bugCpu::reload() {
+	// Clear all systems variables
+	A = 0;
+	X = 0;
+	Y = 0;
+	status = 0;
+	RAM = {};
+	traceLog = {};
+	cycles = 0;
+	clockCount = 0;
+	reset();
 }
 
 uint8_t bugCpu::getFlag(FLAGS flag) {
