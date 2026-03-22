@@ -21,6 +21,12 @@ if (NOT SDL3_FOUND)
     include_dependency(SDL3 https://github.com/libsdl-org/SDL.git release-3.4.2)
 endif ()
 
+# --- nfd ---
+find_package(nfd)
+if(NOT nfd_FOUND)
+    include_dependency(nfd https://github.com/btzy/nativefiledialog-extended.git v1.3.0)
+endif()
+
 # --- Dear ImGui ---
 FetchContent_Declare(
         imgui
@@ -63,6 +69,7 @@ target_compile_definitions(BugEmu PRIVATE SDL_MAIN_USE_CALLBACKS)
 target_link_libraries(BugEmu PRIVATE
         SDL3::SDL3
         imgui
+        nfd
 )
 
 if (WIN32)

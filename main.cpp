@@ -10,6 +10,10 @@
 #include "imgui_impl_sdlrenderer3.h"
 #include "cmake-build-release/_deps/imgui-src/imgui_internal.h"
 
+#include <nfd.h>
+#include <filesystem>
+#include <format>
+
 
 static SDL_Window *window = nullptr;
 static SDL_Renderer *renderer = nullptr;
@@ -22,9 +26,32 @@ bool show_debug_window = false;
 // we use a struct to maintain app state
 struct AppState {
     bugCpu cpu;
-
 };
 
+// We use Native File Dialog for our file needs
+char* openFile() {
+    NFD_Init();
+
+    nfdu8char_t *outPath;
+    nfdu8filteritem_t filters[1] = { { "NES file", "nes" }};
+    nfdopendialogu8args_t args = {0};
+    args.filterList = filters;
+    args.filterCount = 1;
+    nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
+    if (result == NFD_OKAY)
+    {
+        puts("Success!");
+        puts(outPath);
+        NFD_FreePathU8(outPath);
+        return outPath;
+    }
+    if (result != NFD_CANCEL)
+    {
+        printf("Error: %s\n", NFD_GetError());
+    }
+    NFD_Quit();
+    return nullptr;
+}
 
 /* This function runs once at startup. Replaces main()*/
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
@@ -39,7 +66,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     // Rewritten old main() code
     auto* as = new AppState();
-    as->cpu.filepath = "C:/Users/felip/CLionProjects/BugEmu/test_roms/6_Instructions2.nes";
+
     *appstate = as;
 
     // Configure ImGui
@@ -100,8 +127,16 @@ void renderMain(void *appstate) {
 
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
-            ImGui::Text("%s", as->cpu.filepath.c_str());
-            // todo: add a real file manager
+            if (ImGui::MenuItem("Open..")) {
+                char* filepath = openFile();
+                if (filepath) {
+                    as->cpu.filepath = filepath;
+                    std::string new_title = std::format("BugEmu - {}", std::filesystem::path(as->cpu.filepath).stem().string());
+                    SDL_SetWindowTitle(window, new_title.c_str());
+                    // NewRunFunction, this is part of the to do that's a few lines down, it should be a combination of reset and run and possibly something extra to makesure the ram is initialized to 0
+                }
+
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Emulation")) {

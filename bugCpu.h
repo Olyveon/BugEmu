@@ -119,13 +119,13 @@ private:
     std::string getDisassemblyOperand();
     std::string parseRegisters(uint8_t a, uint8_t x, uint8_t y, uint8_t stckp);
     std::string parseFlags(uint8_t stat);
-    uint16_t instPC;    // Program counter where the current instruction started, set at the start of said function
-    uint8_t log_a;
-    uint8_t log_x;
-    uint8_t log_y;
-    uint8_t log_sp;
-    uint8_t log_status;
-    uint16_t ind_addr;  // The address used originally for indirect instructions
+    uint16_t instPC {};    // Program counter where the current instruction started, set at the start of said function
+    uint8_t log_a {};
+    uint8_t log_x {};
+    uint8_t log_y {};
+    uint8_t log_sp {};
+    uint8_t log_status {};
+    uint16_t ind_addr {};  // The address used originally for indirect instructions
 
 
     // enum we need for disassembly
