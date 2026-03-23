@@ -161,6 +161,13 @@ void renderMain(void *appstate) {
     SDL_RenderClear(renderer);
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 100);
     SDL_RenderDebugText(renderer, 180, 100, "Emulator running!!");
+    SDL_Texture* screenTexture = SDL_CreateTexture(renderer,
+                             SDL_PIXELFORMAT_RGBA8888,
+                             SDL_TEXTUREACCESS_STREAMING,
+                             256, 240);
+    SDL_UpdateTexture(screenTexture, nullptr, as->nes.screenBuffer, 256 * sizeof(uint32_t));
+    SDL_RenderClear(renderer);
+    SDL_RenderTexture(renderer, screenTexture, nullptr, nullptr);
 
 }
 
