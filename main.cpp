@@ -28,30 +28,32 @@ bool show_debug_window = false;
 // we use a struct to maintain app state
 struct AppState {
     bugNES nes;
+    SDL_Texture* screenTexture;
 };
+
+// NES native resolution
+static constexpr int NES_W = 256;
+static constexpr int NES_H = 128;
 
 // We use Native File Dialog for our file needs
 char* openFile() {
-    NFD_Init();
-
-    nfdu8char_t *outPath;
+    nfdu8char_t *outPath = nullptr;
     nfdu8filteritem_t filters[1] = { { "NES file", "nes" }};
     nfdopendialogu8args_t args = {0};
     args.filterList = filters;
     args.filterCount = 1;
+
     nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
+
     if (result == NFD_OKAY)
     {
-        puts("Success!");
-        puts(outPath);
-        NFD_FreePathU8(outPath);
-        return outPath;
+        return outPath; // the caller must free the outPath
     }
     if (result != NFD_CANCEL)
     {
         printf("Error: %s\n", NFD_GetError());
     }
-    NFD_Quit();
+
     return nullptr;
 }
 
@@ -70,13 +72,26 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     auto* as = new AppState();
     *appstate = as;
 
+    // remember to put create texture here, i was creating one per frame and causing a gigantic memory leak
+    as->screenTexture = SDL_CreateTexture(renderer,
+                             SDL_PIXELFORMAT_RGBA8888,
+                             SDL_TEXTUREACCESS_STREAMING,
+                             256, 128);
+
+    if (!as->screenTexture)
+        return SDL_APP_FAILURE;
+
     // Configure ImGui
     IMGUI_CHECKVERSION();
     mainContext = ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
+    NFD_Init();
+
     ImGui::StyleColorsDark();
+
+
 
     // Backends for SDL_Renderer3
     ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
@@ -123,19 +138,42 @@ void closeDebugWindow(void *appstate) {
     as->nes.cpu.logging = false;
 }
 
+// Returns the largest rect that fits (availW x availH) at NES aspect ratio, centered
+static SDL_FRect centeredAspectRect(float availW, float availH)
+{
+    const float nesAspect = (float)NES_W / (float)NES_H;
+    float w = availW;
+    float h = w / nesAspect;
+
+    if (h > availH) {
+        h = availH;
+        w = h * nesAspect;
+    }
+
+    return {
+        (availW - w) * 0.5f,
+        (availH - h) * 0.5f,
+        w,
+        h
+    };
+}
+
 void renderMain(void *appstate) {
     auto* as = (AppState*)appstate;
 
+    float menuBarHeight {};
+
     if (ImGui::BeginMainMenuBar()) {
+        menuBarHeight = ImGui::GetWindowHeight();
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Open..")) {
-                char* filepath = openFile();
-                if (filepath) {
+                if (char* filepath = openFile()) {
                     as->nes.cart.filepath = filepath;
-                    std::string new_title = std::format("BugEmu - {}", std::filesystem::path(as->nes.cart.filepath).stem().string());
+                    std::string new_title = std::format("BugEmu - {}", std::filesystem::path(filepath).stem().string());
                     SDL_SetWindowTitle(window, new_title.c_str());
                     as->nes.cart.insertCartridge();
-                    as->nes.cpu.reload();
+                    as->nes.reload();
+                    NFD_FreePathU8(filepath);
                     // as->cpu.run();
                 }
 
@@ -144,7 +182,7 @@ void renderMain(void *appstate) {
         }
         if (ImGui::BeginMenu("Emulation")) {
             if (ImGui::MenuItem("Run")) as->nes.cpu.run();
-            if (ImGui::MenuItem("Reload")) as->nes.cpu.reload();
+            if (ImGui::MenuItem("Reload")) as->nes.reload();
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
@@ -153,21 +191,29 @@ void renderMain(void *appstate) {
                 show_debug_window = true;
                 as->nes.cpu.logging = true;
             }
+            if (ImGui::MenuItem("Draw Pattern Table")) {
+                as->nes.ppu.drawPatternTable();
+            }
             ImGui::EndMenu();
         }
         ImGui::EndMainMenuBar();
     }
-    SDL_SetRenderDrawColor(renderer, 255, 90, 100, 255);
+
+    // Update pixels on screen
+    SDL_UpdateTexture(as->screenTexture, nullptr, as->nes.screenBuffer, NES_W * sizeof(uint32_t));
+    SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255);
     SDL_RenderClear(renderer);
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 100);
-    SDL_RenderDebugText(renderer, 180, 100, "Emulator running!!");
-    SDL_Texture* screenTexture = SDL_CreateTexture(renderer,
-                             SDL_PIXELFORMAT_RGBA8888,
-                             SDL_TEXTUREACCESS_STREAMING,
-                             256, 240);
-    SDL_UpdateTexture(screenTexture, nullptr, as->nes.screenBuffer, 256 * sizeof(uint32_t));
-    SDL_RenderClear(renderer);
-    SDL_RenderTexture(renderer, screenTexture, nullptr, nullptr);
+
+    // offset destination rect so texture always starts below the menu bar
+    int winW, winH;
+    SDL_GetWindowSize(window, &winW, &winH);
+    float availW = (float)winW;
+    float availH = (float)winH - menuBarHeight;
+
+    SDL_FRect dst = centeredAspectRect(availW, availH);
+    dst.y += menuBarHeight;
+
+    SDL_RenderTexture(renderer, as->screenTexture, nullptr, &dst);
 
 }
 
@@ -281,6 +327,27 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 // This function runs once when the window quits
 void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     // SDL will take care of the window/render, any other things that we need to destroy, do it here
+    auto* as = (AppState*)appstate;
+
+    if (traceLoggerWindow)
+        closeDebugWindow(appstate);
+
+    if (as && as->screenTexture) {
+        SDL_DestroyTexture(as->screenTexture);
+        as->screenTexture = nullptr;
+    }
+
+    ImGui::SetCurrentContext(mainContext);
+    ImGui_ImplSDLRenderer3_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext(mainContext);
+
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+
+    NFD_Quit();
+
+    delete as;
 }
 
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {

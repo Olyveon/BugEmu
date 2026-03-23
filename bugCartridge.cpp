@@ -30,9 +30,13 @@ void bugCartridge::insertCartridge() {
     auto HeaderedROM = ReadAllBytes(filepath);
     std::memcpy(ROM.data(), HeaderedROM.data() + 0x10, 0x8000);
     std::memcpy(Header.data(), HeaderedROM.data() + 0x10, 0x10);
-    std::memcpy(chrROM.data(), HeaderedROM.data() + 0x10, 0x2000);
+    std::memcpy(chrROM.data(), HeaderedROM.data() + 0x8010, 0x2000);
 }
 
 void bugCartridge::cpuRead(uint16_t address, uint8_t &data) {
     data = ROM[address - 0x8000];
+}
+
+void bugCartridge::ppuRead(uint16_t address, uint8_t &data) {
+    data = chrROM[address];
 }

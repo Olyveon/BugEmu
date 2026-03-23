@@ -6,6 +6,7 @@
 
 bugNES::bugNES() {
     cpu.ConnectSystem(this);
+    ppu.ConnectSystem(this);
 }
 
 bugNES::~bugNES() = default;
@@ -34,6 +35,17 @@ void bugNES::cpuWrite(uint16_t address, uint8_t value) {
         constexpr uint16_t MASK = 0x7FF;
         ram[address & MASK] = value;
     }
+}
+
+uint8_t bugNES::ppuRead(uint16_t address) {
+    uint8_t data = 0x00;
+    cart.ppuRead(address, data);
+    return data;
+}
+
+void bugNES::reload() {
+    cpu.reload();
+    std::fill_n(screenBuffer, 256*128, 0xFF000000);
 }
 
 void bugNES::nesClock() {
