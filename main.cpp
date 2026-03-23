@@ -77,6 +77,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
                              SDL_PIXELFORMAT_RGBA8888,
                              SDL_TEXTUREACCESS_STREAMING,
                              256, 128);
+    // sweet, sweet pixels
+    SDL_SetTextureScaleMode(as->screenTexture, SDL_SCALEMODE_NEAREST);
 
     if (!as->screenTexture)
         return SDL_APP_FAILURE;
