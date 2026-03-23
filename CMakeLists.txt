@@ -21,6 +21,11 @@ if (NOT SDL3_FOUND)
     include_dependency(SDL3 https://github.com/libsdl-org/SDL.git release-3.4.2)
 endif ()
 
+find_package(SDL3_image)
+if (NOT SDL3_image_FOUND)
+    include_dependency(SDL3_image https://github.com/libsdl-org/SDL_image.git release-3.4.0)
+endif()
+
 # --- nfd ---
 find_package(nfd)
 if(NOT nfd_FOUND)
@@ -74,6 +79,7 @@ target_compile_definitions(BugEmu PRIVATE SDL_MAIN_USE_CALLBACKS)
 
 target_link_libraries(BugEmu PRIVATE
         SDL3::SDL3
+        SDL3_image::SDL3_image
         imgui
         nfd
 )

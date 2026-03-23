@@ -8,6 +8,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
+#include <SDL3_image/SDL_image.h>
 #include "cmake-build-release/_deps/imgui-src/imgui_internal.h"
 
 #include <nfd.h>
@@ -66,6 +67,16 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     if (!SDL_CreateWindowAndRenderer("BugEmu", 1024, 768, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
         return SDL_APP_FAILURE;
+    }
+
+    SDL_Surface* iconSurface = IMG_Load("../assets/bugEmu_logo.png");
+
+    if (iconSurface) {
+        SDL_SetWindowIcon(window, iconSurface);
+
+        SDL_DestroySurface(iconSurface);
+    } else {
+        SDL_Log("Logo couldnt be loaded: %s", SDL_GetError());
     }
 
     // Rewritten old main() code
