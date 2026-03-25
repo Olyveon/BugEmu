@@ -25,6 +25,71 @@ uint8_t bugPpu::ppuRead(uint16_t address) {
     return nes->ppuRead(address);
 }
 
+void bugPpu::ppuWrite(uint16_t address, uint8_t data) {
+    nes->ppuWrite(address, data);
+}
+
+void bugPpu::cpuWrite(uint16_t address, uint8_t data) {
+    switch (address) {
+        case 0x2000:    // PPUCTRL
+            break;
+        case 0x2001:    // PPUMASK
+            break;
+        case 0x2002:    // PPUSTATUS
+            break;
+        case 0x2003:    // OAMADDR
+            break;
+        case 0x2004:    // OAMDATA
+            break;
+        case 0x2005:    // PPUSCROLL
+            break;
+        case 0x2006:    // PPUADDR
+            if (!w) {
+                // the first write goes towards the high byte, we mask it $3F since bits 15 and 14 of VRAM address are ignored
+                temp = (data & 0x3F) << 8;
+                // we wait until we have the low byte to write the address
+            } else {
+                // second write only sets low byte
+                v = (temp | data);
+                t = v;
+            }
+            w = !w;
+            break;
+        case 0x2007:    // PPUDATA
+            if (v < 0x2000) {
+                // Write to pattern table (if the cartdrige supports it)
+                if (nes->cart.chrRom_Size == 0) {
+
+                }
+            } else if (v < 0x3F00) {
+                // write to nametables
+                if (nes->cart.nametableArr == 0) {
+                    // vertical arrangement or horizontal mirroring, we do an and with $800 because if not then all addresses would mirror to the first $400 bytes
+                    VRAM[(v & 0x3FF) | v & 0x800 >> 1] = data;
+
+                } else {
+                    // horizontal arrangement or vertical mirroring
+                    VRAM[v & 0x7FF] = data;
+                }
+            } else {
+                // write to palette ram
+                // if index 0 of the palette then use mirror
+                if ((v & 3) == 0) {
+                    // background and sprite bytes of index 0 mirrored, e.g. $0 and $10 are mirrors of each other, same for $4 and $14 and $08 and $18, hence why we use mask $0F
+                    paletteRAM[v & 0x0F] = data;
+                }
+                else {
+                    paletteRAM[v & 0x1F] = data;
+                }
+            }
+            v += uint16_t(vramInc32Mode ? 32 : 1);
+            v &= 0x3FFF;
+            break;
+        default:
+            break;
+    }
+}
+
 uint8_t bugPpu::getIndex(uint8_t x, uint8_t y) {
     lowByte = ppuRead(y);
     return lowByte;

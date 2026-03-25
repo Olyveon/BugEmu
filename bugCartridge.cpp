@@ -26,11 +26,18 @@ std::vector<uint8_t> bugCartridge::ReadAllBytes(const std::string &path) {
     return buffer;
 }
 
+void bugCartridge::setHeaderData() {
+    prgRom_Size = Header[4];
+    chrRom_Size = Header[5];
+    nametableArr = (Header[6] & 0x1);
+}
+
 void bugCartridge::insertCartridge() {
     auto HeaderedROM = ReadAllBytes(filepath);
     std::memcpy(ROM.data(), HeaderedROM.data() + 0x10, 0x8000);
-    std::memcpy(Header.data(), HeaderedROM.data() + 0x10, 0x10);
-    std::memcpy(chrROM.data(), HeaderedROM.data() + 0x8010, 0x2000);
+    std::memcpy(Header.data(), HeaderedROM.data(), 0x10);
+    std::memcpy(chrMem.data(), HeaderedROM.data() + 0x8010, 0x2000);
+    setHeaderData();
 }
 
 void bugCartridge::cpuRead(uint16_t address, uint8_t &data) {
@@ -38,5 +45,9 @@ void bugCartridge::cpuRead(uint16_t address, uint8_t &data) {
 }
 
 void bugCartridge::ppuRead(uint16_t address, uint8_t &data) {
-    data = chrROM[address];
+    data = chrMem[address];
+}
+
+void bugCartridge::ppuWrite(uint16_t address, uint8_t data) {
+    chrMem[address] = data;
 }
