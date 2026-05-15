@@ -198,11 +198,14 @@ void renderMain(void *appstate) {
             if (ImGui::MenuItem("Run")) {
                 printf("Running file in %s \n", as->nes.cart.filepath.empty() ? "The file path is empty" : as->nes.cart.filepath.c_str());
                 if (as->nes.cart.filepath.empty()) {
-                    show_no_cart_popup = true;
+                    ImGui::OpenPopup("No Cart");
                 } else {
-                    as->nes.cpu.run();
+                    as->nes.cpu.run();  // This now just sets the continuous_running flag
                 }
 
+            }
+            if (ImGui::MenuItem("Pause")) {
+                as->nes.cpu.continuous_running = false;
             }
             if (ImGui::MenuItem("Reload")) as->nes.reload();
             ImGui::EndMenu();
@@ -328,6 +331,9 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     ImGui::NewFrame();
 
     renderMain(as);
+
+    // Execute one instruction per frame if emulation is running
+    as->nes.cpu.continueRunning();
 
     ImGui::Render();
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);

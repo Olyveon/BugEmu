@@ -21,14 +21,17 @@ bugPpu::bugPpu() :
 bugPpu::~bugPpu() {
 }
 
+// This function is for when the PPU needs to read
 uint8_t bugPpu::ppuRead(uint16_t address) {
     return nes->ppuRead(address);
 }
 
+// This function is for when the PPU needs to write
 void bugPpu::ppuWrite(uint16_t address, uint8_t data) {
     nes->ppuWrite(address, data);
 }
 
+// This function is for when the CPU is writing TO the PPU
 void bugPpu::cpuWrite(uint16_t address, uint8_t data) {
     switch (address) {
         case 0x2000:    // PPUCTRL
@@ -90,6 +93,45 @@ void bugPpu::cpuWrite(uint16_t address, uint8_t data) {
     }
 }
 
+// This function is for when the CPU reads FROM the PPU
+uint8_t bugPpu::cpuRead(uint16_t address) {
+    switch (address) {
+        case 0x2002:    // PPUSTATUS
+            return 0x80;
+        case 0x2007:
+            temp = ppuReadBuffer;
+
+            if (v < 0x2000) {
+                ppuReadBuffer = ppuRead(v);
+            }
+            else if (v < 0x3F00) {
+                // Read from the Nametables and we once again check for horizontal or vertical mirroring
+                if (nes->cart.nametableArr == 0) {
+                    // Horizontal
+                    ppuReadBuffer = VRAM[(v & 0x3FF) | v & 0x800 >> 1];
+                } else {
+                    // Vertical
+                    ppuReadBuffer = VRAM[v & 0x7FF];
+                }
+            }
+            else {
+                // Read from Palette RAM
+                if ((v & 3) == 0) {
+                    temp = paletteRAM[v & 0x0F];
+                }
+                else {
+                    temp = paletteRAM[v & 0x1F];
+                }
+            }
+            v += uint16_t(vramInc32Mode ? 32 : 1);
+            v &= 0x3FFF;
+            return temp;
+        default:
+            return 0;
+    }
+}
+
+
 uint8_t bugPpu::getIndex(uint8_t x, uint8_t y) {
     lowByte = ppuRead(y);
     return lowByte;
@@ -144,14 +186,16 @@ void bugPpu::drawNametable() {
 }
 
 void bugPpu::ppuClock() {
-    index = getIndex(cycle, scanline);
-    color = getColor(index);
-    setPixel(cycle, scanline, color);
-    if (cycle == 255) {
+    cycle++;
+    // index = getIndex(cycle, scanline);
+    // color = getColor(index);
+    // setPixel(cycle, scanline, color);
+    if (cycle > 341) {
         cycle = 0;
         scanline++;
-        return;
+        if (scanline > 261) {
+            scanline = 0;
+        }
     }
-    cycle++;
 }
 

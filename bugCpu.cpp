@@ -80,6 +80,9 @@ void bugCpu::clock() {
 			traceLog.push_back(entry);
 		}
 	}
+	nes->ppu.ppuClock();
+	nes->ppu.ppuClock();
+	nes->ppu.ppuClock();
 	cycles--;
 }
 
@@ -88,6 +91,13 @@ void bugCpu::continue_instruction() {
 		clock();
 	}
 	clock();
+}
+
+// Called each frame to continue running if in continuous mode
+void bugCpu::continueRunning() {
+	if (continuous_running && !CPU_Halted) {
+		continue_instruction();  // Execute one complete instruction per frame
+	}
 }
 
 // Disassembles the opcode's operand based on its addressing mode
@@ -154,9 +164,7 @@ std::string bugCpu::parseFlags(uint8_t stat) {
 }
 
 void bugCpu::run() {
-	while (!CPU_Halted) {
-		clock();
-	}
+	continuous_running = true;
 }
 
 std::vector<uint8_t> bugCpu::ReadAllBytes(const std::string& path)

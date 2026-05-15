@@ -19,6 +19,9 @@ uint8_t bugNES::cpuRead(uint16_t address) {
         constexpr uint16_t MASK = 0x7FF;
         return ram[address & MASK];
     }
+    if (address < 0x4000) {
+        return ppu.cpuRead(address & 0x2007);
+    }
     if (address >= 0x8000) {
         uint8_t data = 0x00;
         cart.cpuRead(address, data);

@@ -30,6 +30,7 @@ class bugPpu {
     uint8_t highByte {};
     uint8_t twoBit {};
     uint16_t temp {};       // used for multiple operations as a temporal value
+    uint8_t ppuReadBuffer {};
 
     // Ppu internal registers
     bool w {};          // Write Latch
@@ -42,6 +43,7 @@ class bugPpu {
     void ppuWrite(uint16_t address, uint8_t data);
 
     void cpuWrite(uint16_t address, uint8_t data);
+    uint8_t cpuRead(uint16_t address);
 
     uint8_t getIndex(uint8_t x, uint8_t y);
     uint32_t getColor(uint8_t idx); // from an x and y index it gets the color that it should be drawn as in RGBA8888 format for SDL3

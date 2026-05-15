@@ -46,6 +46,7 @@ public:
     };
 
     bool CPU_Halted = false;
+    bool continuous_running = false;  // Flag to indicate continuous execution mode
 
     //System Variables
     uint16_t PC = 0x0000;           // Program Counter
@@ -80,6 +81,7 @@ public:
     void clock();
     void reset();
     void run();
+    void continueRunning();  // Called each frame to execute one instruction if in continuous mode
     void reload();
     std::vector<uint8_t> ReadAllBytes(const std::string& path);
 
