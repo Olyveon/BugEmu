@@ -30,7 +30,7 @@ public:
     void setHeaderData();
 
     void insertCartridge();
-    std::string filepath;
+    std::string filepath{};
 
     void cpuRead(uint16_t address, uint8_t &data);
     void ppuRead(uint16_t address, uint8_t &data);

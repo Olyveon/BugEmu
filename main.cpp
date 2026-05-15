@@ -25,6 +25,7 @@ static SDL_Window *traceLoggerWindow = nullptr;
 static SDL_Renderer *traceLoggerRenderer = nullptr;
 static ImGuiContext *traceLoggerContext = nullptr;
 bool show_debug_window = false;
+bool show_no_cart_popup = false;
 
 // we use a struct to maintain app state
 struct AppState {
@@ -34,7 +35,7 @@ struct AppState {
 
 // NES native resolution
 static constexpr int NES_W = 256;
-static constexpr int NES_H = 128;
+static constexpr int NES_H = 240;
 
 // We use Native File Dialog for our file needs
 char* openFile() {
@@ -87,7 +88,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     as->screenTexture = SDL_CreateTexture(renderer,
                              SDL_PIXELFORMAT_RGBA8888,
                              SDL_TEXTUREACCESS_STREAMING,
-                             256, 128);
+                             256, 240);
     // sweet, sweet pixels
     SDL_SetTextureScaleMode(as->screenTexture, SDL_SCALEMODE_NEAREST);
 
@@ -194,7 +195,15 @@ void renderMain(void *appstate) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Emulation")) {
-            if (ImGui::MenuItem("Run")) as->nes.cpu.run();
+            if (ImGui::MenuItem("Run")) {
+                printf("Running file in %s \n", as->nes.cart.filepath.empty() ? "The file path is empty" : as->nes.cart.filepath.c_str());
+                if (as->nes.cart.filepath.empty()) {
+                    show_no_cart_popup = true;
+                } else {
+                    as->nes.cpu.run();
+                }
+
+            }
             if (ImGui::MenuItem("Reload")) as->nes.reload();
             ImGui::EndMenu();
         }
@@ -207,9 +216,23 @@ void renderMain(void *appstate) {
             if (ImGui::MenuItem("Draw Pattern Table")) {
                 as->nes.ppu.drawPatternTable();
             }
+            if (ImGui::MenuItem("Draw Nametable")) {
+                as->nes.ppu.drawNametable();
+            }
             ImGui::EndMenu();
         }
         ImGui::EndMainMenuBar();
+    }
+
+    if (ImGui::BeginPopupModal("No Cart", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("No cartridge loaded! Please load a cartridge to run the emulator.");
+        if (ImGui::Button("OK")) {
+            ImGui::CloseCurrentPopup();
+            show_no_cart_popup = false;
+        }
+        ImGui::EndPopup();
+    } else if (show_no_cart_popup) {
+        ImGui::OpenPopup("No Cart");
     }
 
     // Update pixels on screen

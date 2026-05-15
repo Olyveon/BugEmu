@@ -47,6 +47,7 @@ class bugPpu {
     uint32_t getColor(uint8_t idx); // from an x and y index it gets the color that it should be drawn as in RGBA8888 format for SDL3
     void setPixel(uint8_t x, uint8_t y, uint32_t color);
     void drawPatternTable();
+    void drawNametable();
 
     void ppuClock();
 

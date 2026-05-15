@@ -26,7 +26,7 @@ public:
     bugPpu ppu;
     bugCartridge cart;
 
-    uint32_t screenBuffer[256 * 128] = {}; // Stores colors in format RGBA8888 o ARGB8888
+    uint32_t screenBuffer[256 * 240] = {}; // Stores colors in format RGBA8888 o ARGB8888
 
 
     void cpuWrite(uint16_t address, uint8_t data);

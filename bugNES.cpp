@@ -36,7 +36,7 @@ void bugNES::cpuWrite(uint16_t address, uint8_t value) {
         // Write to a ppu register, it's mirrored from $2000 to $3FFF,
         // but are only 8 bytes of registers, so we mask it towards the "real"
         // addresses: $2000 to $2007
-        ppu.cpuWrite(address, value);
+        ppu.cpuWrite((address & 0x2007), value);
     }
 }
 
@@ -47,7 +47,7 @@ uint8_t bugNES::ppuRead(uint16_t address) {
 }
 
 void bugNES::ppuWrite(uint16_t address, uint8_t data) {
-    // todo: mapper stuff to make sure the address is mapped correctly
+    // TODO: mapper stuff to make sure the address is mapped correctly
     cart.ppuWrite(address, data);
 }
 

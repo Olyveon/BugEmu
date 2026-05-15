@@ -59,7 +59,7 @@ void bugPpu::cpuWrite(uint16_t address, uint8_t data) {
             if (v < 0x2000) {
                 // Write to pattern table (if the cartdrige supports it)
                 if (nes->cart.chrRom_Size == 0) {
-
+                    ppuWrite(v, data);
                 }
             } else if (v < 0x3F00) {
                 // write to nametables
@@ -119,6 +119,24 @@ void bugPpu::drawPatternTable() {
                         color = getColor(twoBit);
                         setPixel(x + col*8 + table*128, y + row*8, color);
                     }
+                }
+            }
+        }
+    }
+}
+
+void bugPpu::drawNametable() {
+    for (int row = 0; row < 30; row++) {
+        for (int col = 0; col < 32; col++) {
+            uint8_t tileIndex = VRAM[row*32 + col];
+            for (int y = 0; y < 8; y++) {
+                lowByte = ppuRead(y + tileIndex*16);
+                highByte = ppuRead(8 + y + tileIndex*16);
+                for (int x = 0; x < 8; x++) {
+                    twoBit = ((lowByte >> (7-x)) & 1) == 1 ? 1 : 0;
+                    twoBit += ((highByte>>(7-x)) & 1) == 1 ? 2 : 0;
+                    color = getColor(twoBit);
+                    setPixel(x + col*8, y + row*8, color);
                 }
             }
         }
