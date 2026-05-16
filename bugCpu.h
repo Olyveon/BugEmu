@@ -7,6 +7,10 @@
 #include <deque>
 #include <string>
 #include <vector>
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include <condition_variable>
 
 
 #ifndef BUGEMU_BUGCPU_H
@@ -46,7 +50,7 @@ public:
     };
 
     bool CPU_Halted = false;
-    bool continuous_running = false;  // Flag to indicate continuous execution mode
+    std::atomic<bool> continuous_running{false};  // Flag to indicate continuous execution mode
 
     //System Variables
     uint16_t PC = 0x0000;           // Program Counter
@@ -80,8 +84,16 @@ public:
 
     void clock();
     void reset();
+    // Start continuous execution in a background thread (non-blocking).
     void run();
-    void continueRunning();  // Called each frame to execute one instruction if in continuous mode
+    // Pause continuous execution (thread remains alive but will block until resumed).
+    void pause();
+    // Stop the background execution thread and join it. Safe to call multiple times.
+    void stopExecution();
+    // Called each frame by the main loop only when not using the worker thread (kept for compatibility).
+    void continue_instruction();
+    // Called by worker thread to keep running while continuous_running is true.
+    void continueRunning();
     void reload();
     std::vector<uint8_t> ReadAllBytes(const std::string& path);
 
@@ -101,8 +113,9 @@ public:
     };
     std::deque<traceEntry> traceLog;
     bool logging = false;   // we don't want to be always logging, defaults to false
-    size_t MAX_TRACE_LENGTH = 256;    // We need a cap for logging
-    void continue_instruction();
+    size_t MAX_TRACE_LENGTH = 512;    // We need a cap for logging
+    // Return a thread-safe snapshot copy of the trace log for rendering in the UI thread
+    std::deque<traceEntry> getTraceLogSnapshot();
 
     uint8_t fetch();
     uint8_t fetched = 0x00;
@@ -119,6 +132,10 @@ private:
     uint8_t getFlag(FLAGS flag, uint8_t flags);     // When we don't want to use the ones currently being used (logging)
     void    setFlag(FLAGS flag, bool value);
 
+    // For PPU NMI
+    bool NMILevelDetector {};
+    bool DoNMI {};
+
     // For logging purposes
     std::string getDisassemblyOperand();
     std::string parseRegisters(uint8_t a, uint8_t x, uint8_t y, uint8_t stckp);
@@ -132,6 +149,14 @@ private:
     uint16_t ind_addr {};  // The address used originally for indirect instructions
 
     bugNES *nes = nullptr;
+    // Threading primitives for background CPU execution
+    std::thread cpuThread;
+    std::atomic<bool> terminateThread{false};
+    std::atomic<bool> cpuThreadRunning{false};
+    std::mutex runMutex;
+    std::condition_variable runCV;
+    // Protects access to traceLog
+    std::mutex traceMutex;
     // enum we need for disassembly
     enum AddrMode {
         Imp, Imm, Zp0, ZpX, Abs, Ind,

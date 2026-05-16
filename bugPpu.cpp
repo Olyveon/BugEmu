@@ -31,12 +31,28 @@ void bugPpu::ppuWrite(uint16_t address, uint8_t data) {
     nes->ppuWrite(address, data);
 }
 
+void bugPpu::reload() {
+    cycle = 0;
+    scanline = 0;
+    v = 0;
+    t = 0;
+    w = false;
+    ppuReadBuffer = 0;
+    VRAM = {};
+    paletteRAM = {};
+    ctrl.value = 0x00;
+    mask.value = 0x00;
+    status.value = 0x00;
+}
+
 // This function is for when the CPU is writing TO the PPU
 void bugPpu::cpuWrite(uint16_t address, uint8_t data) {
     switch (address) {
         case 0x2000:    // PPUCTRL
+            ctrl.value = data;
             break;
         case 0x2001:    // PPUMASK
+            mask.value = data;
             break;
         case 0x2002:    // PPUSTATUS
             break;
@@ -85,7 +101,7 @@ void bugPpu::cpuWrite(uint16_t address, uint8_t data) {
                     paletteRAM[v & 0x1F] = data;
                 }
             }
-            v += uint16_t(vramInc32Mode ? 32 : 1);
+            v += uint16_t(ctrl.vramInc ? 32 : 1);
             v &= 0x3FFF;
             break;
         default:
@@ -97,7 +113,14 @@ void bugPpu::cpuWrite(uint16_t address, uint8_t data) {
 uint8_t bugPpu::cpuRead(uint16_t address) {
     switch (address) {
         case 0x2002:    // PPUSTATUS
-            return 0x80;
+        {
+            temp8 = 0;
+            temp8 |= uint8_t(status.value ? 0x80 : 0x00);
+            temp8 |= 0x40;
+            status.vBlank = 0;
+            w = false;
+            return temp8;
+        }
         case 0x2007:
             temp = ppuReadBuffer;
 
@@ -123,7 +146,7 @@ uint8_t bugPpu::cpuRead(uint16_t address) {
                     temp = paletteRAM[v & 0x1F];
                 }
             }
-            v += uint16_t(vramInc32Mode ? 32 : 1);
+            v += uint16_t(ctrl.vramInc ? 32 : 1);
             v &= 0x3FFF;
             return temp;
         default:
@@ -139,12 +162,12 @@ uint8_t bugPpu::getIndex(uint8_t x, uint8_t y) {
 
 uint32_t bugPpu::getColor(uint8_t idx) {
     idx &= 0x3F;
-    return nesPalette[idx];
+    return nesPalette[paletteRAM[idx]];
 }
 
-void bugPpu::setPixel(uint8_t x, uint8_t y, uint32_t color) {
+void bugPpu::setPixel(uint8_t x, uint8_t y, uint32_t pixelColor) {
     if (x >= 0 && x < 256 && y >= 0 && y < 240) {
-        nes->screenBuffer[(y << 8) | x] = color;
+        nes->screenBuffer[(y << 8) | x] = pixelColor;
     }
 }
 
@@ -170,14 +193,25 @@ void bugPpu::drawPatternTable() {
 void bugPpu::drawNametable() {
     for (int row = 0; row < 30; row++) {
         for (int col = 0; col < 32; col++) {
+            auto attributeOffset = uint8_t((col >> 2) + (row >> 2) * 8);
+            uint8_t attribute = VRAM[0x3C0 + attributeOffset];
+            auto quadrant = uint8_t(((col >> 1) & 1) + ((row >> 1) & 1) *2 );
+            auto pair = uint8_t((attribute >> (quadrant * 2)) & 0x03);
+
             uint8_t tileIndex = VRAM[row*32 + col];
             for (int y = 0; y < 8; y++) {
-                lowByte = ppuRead(y + tileIndex*16);
-                highByte = ppuRead(8 + y + tileIndex*16);
+                int useSecondTable = ctrl.backgroundPatternTable ? 4096 : 0;
+                lowByte = ppuRead(y + tileIndex*16 + useSecondTable);
+                highByte = ppuRead(8 + y + tileIndex*16 + useSecondTable);
                 for (int x = 0; x < 8; x++) {
                     twoBit = ((lowByte >> (7-x)) & 1) == 1 ? 1 : 0;
                     twoBit += ((highByte>>(7-x)) & 1) == 1 ? 2 : 0;
-                    color = getColor(twoBit);
+                    if (twoBit == 0) {
+                        color = getColor(0);
+                    }
+                    else {
+                        color = getColor(twoBit + pair * 4);
+                    }
                     setPixel(x + col*8, y + row*8, color);
                 }
             }
@@ -186,6 +220,28 @@ void bugPpu::drawNametable() {
 }
 
 void bugPpu::ppuClock() {
+    if (cycle == 1 && scanline == 241) {
+        status.vBlank = 1;
+    }
+    else if (cycle == 1 && scanline == 261) {
+        status.vBlank = 1;
+    }
+
+    if ((scanline < 240 || scanline == 261)) {
+        // We checked if this is a visible scanline or the pre-render line (scanline 261)
+        if ((cycle > 0 && cycle < 256) || (cycle > 320 && cycle <= 336)) {
+            // We checked in this case if it's a visible pixel or the start of the next scnaline
+            if (mask.showBackground || mask.showSprites) {  // Rendering is enabled
+                if (mask.showBackground) {
+                    shiftRegisterPatternLo <<= 1;
+                    shiftRegisterPatternHi <<= 1;
+                    shiftRegisterAttributeLo <<= 1;
+                    shiftRegisterAttributeHi <<= 1;
+                }
+            }
+        }
+    }
+
     cycle++;
     // index = getIndex(cycle, scanline);
     // color = getColor(index);

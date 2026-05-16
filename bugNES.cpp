@@ -31,11 +31,11 @@ uint8_t bugNES::cpuRead(uint16_t address) {
 }
 
 void bugNES::cpuWrite(uint16_t address, uint8_t value) {
-    if (address <= 0x2000) {
+    if (address < 0x2000) {
         // ram write
         ram[address & 0x7FF] = value;
-    } else
-    if (address < 0x4000) {
+    }
+    else if (address < 0x4000) {
         // Write to a ppu register, it's mirrored from $2000 to $3FFF,
         // but are only 8 bytes of registers, so we mask it towards the "real"
         // addresses: $2000 to $2007
@@ -56,6 +56,7 @@ void bugNES::ppuWrite(uint16_t address, uint8_t data) {
 
 void bugNES::reload() {
     cpu.reload();
+    ppu.reload();
     std::fill_n(screenBuffer, 256*128, 0xFF000000);
 }
 

@@ -205,7 +205,7 @@ void renderMain(void *appstate) {
 
             }
             if (ImGui::MenuItem("Pause")) {
-                as->nes.cpu.continuous_running = false;
+                as->nes.cpu.pause();
             }
             if (ImGui::MenuItem("Reload")) as->nes.reload();
             ImGui::EndMenu();
@@ -296,7 +296,8 @@ void renderDebug(void *appstate) {
         ImGui::TableSetupColumn("Registers & Flags");
         ImGui::TableHeadersRow();
 
-        for (const auto& entry : as->nes.cpu.traceLog) {
+        auto traceSnapshot = as->nes.cpu.getTraceLogSnapshot();
+        for (const auto& entry : traceSnapshot) {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0); ImGui::Text("%X:", entry.programCounter);
             ImGui::SameLine(); ImGui::Text("%s", entry.instruction.c_str());
@@ -314,6 +315,7 @@ void renderDebug(void *appstate) {
     ImGui::Separator();
     if (ImGui::Button("Run one CPU cycle")) as->nes.cpu.clock();
     if (ImGui::Button("Reset"))             as->nes.cpu.reset();
+    if (ImGui::Button("Forcefully unhalt cpu")) as->nes.cpu.CPU_Halted = false;
     if (ImGui::Button("Continue until next instruction")) as->nes.cpu.continue_instruction();
 
     ImGui::End();
@@ -373,6 +375,9 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
 
     if (traceLoggerWindow)
         closeDebugWindow(appstate);
+
+    // Ensure CPU worker thread is stopped before tearing down
+    as->nes.cpu.stopExecution();
 
     if (as && as->screenTexture) {
         SDL_DestroyTexture(as->screenTexture);

@@ -9,6 +9,7 @@
 #include <format>
 #include <stdexcept>
 #include <fstream>
+#include <chrono>
 
 // Credit to OLC (One Lone Coder and his wife for putting this table together, no wonder it took them so long to do that)
 // I modified it slightly for disassembly purposes
@@ -46,9 +47,13 @@ void bugCpu::Write(uint16_t address, uint8_t value) {
 void bugCpu::clock() {
 	clockCount++;
 	if (cycles == 0) {
-		opcode = Read(PC);
-		instPC = PC;
-		PC++;
+		if (!DoNMI) {
+			opcode = Read(PC);
+			instPC = PC;
+			PC++;
+		} else {
+			opcode = 0x00;
+		}
 		// We save the registers and flags from BEFORE the instruction is executed
 		if (logging) {
 			log_a = A;
@@ -65,7 +70,7 @@ void bugCpu::clock() {
 
 
 		cycles += (add1 & add2);
-		// Logging
+		// Logging (thread-safe)
 		if (logging) {
 			traceEntry entry;
 			entry.programCounter = instPC;
@@ -75,28 +80,119 @@ void bugCpu::clock() {
 			entry.registers = parseRegisters(log_a, log_x, log_y, log_sp);
 			entry.flags = parseFlags(log_status);
 			entry.cycles = clockCount;
-			if (traceLog.size() >= MAX_TRACE_LENGTH)
-				traceLog.pop_front();
-			traceLog.push_back(entry);
+			{
+				std::lock_guard<std::mutex> lg(traceMutex);
+				if (traceLog.size() >= MAX_TRACE_LENGTH)
+					traceLog.pop_front();
+				traceLog.push_back(entry);
+			}
 		}
 	}
-	nes->ppu.ppuClock();
-	nes->ppu.ppuClock();
-	nes->ppu.ppuClock();
+
 	cycles--;
 }
 
 void bugCpu::continue_instruction() {
+	bool PreviousNMILevel = NMILevelDetector;
+	NMILevelDetector = (nes->ppu.status.vBlank  && nes->ppu.ctrl.enableNMI);
+	if (!PreviousNMILevel && NMILevelDetector) {
+		DoNMI = true;
+	}
 	while (cycles != 0) {
 		clock();
+		nes->ppu.ppuClock();
+	    nes->ppu.ppuClock();
+	    nes->ppu.ppuClock();
 	}
 	clock();
+	nes->ppu.ppuClock();
+	nes->ppu.ppuClock();
+	nes->ppu.ppuClock();
 }
 
-// Called each frame to continue running if in continuous mode
+// Return a thread-safe snapshot of the trace log for UI rendering
+std::deque<bugCpu::traceEntry> bugCpu::getTraceLogSnapshot() {
+	std::lock_guard<std::mutex> lg(traceMutex);
+	return traceLog;
+}
+
+// Pause continuous execution without terminating the background thread
+void bugCpu::pause() {
+	continuous_running.store(false);
+}
+
+// Stop and join the background CPU thread. Safe to call multiple times.
+void bugCpu::stopExecution() {
+	terminateThread.store(true);
+	continuous_running.store(false);
+	runCV.notify_all();
+	if (cpuThread.joinable()) {
+		cpuThread.join();
+	}
+	cpuThreadRunning.store(false);
+	terminateThread.store(false);
+}
+
+// Start or resume continuous execution. Will create the worker thread if needed.
+void bugCpu::run() {
+	// If thread not already running, spawn it
+	if (!cpuThreadRunning.load()) {
+		terminateThread.store(false);
+		continuous_running.store(true);
+		cpuThread = std::thread([this]() {
+			cpuThreadRunning.store(true);
+			const int batch = 2000; // number of CPU clocks per inner batch
+			while (!terminateThread.load()) {
+				// Wait until we're asked to run or termination requested
+				std::unique_lock<std::mutex> lk(runMutex);
+				runCV.wait(lk, [this]() { return continuous_running.load() || terminateThread.load(); });
+				if (terminateThread.load()) break;
+
+				// Execute in batches while running
+				while (continuous_running.load() && !CPU_Halted && !terminateThread.load()) {
+					for (int i = 0; i < batch && continuous_running.load() && !CPU_Halted && !terminateThread.load(); ++i) {
+						// NMI detection (same logic as single-step path)
+						bool PreviousNMILevel = NMILevelDetector;
+						NMILevelDetector = (nes->ppu.status.vBlank  && nes->ppu.ctrl.enableNMI);
+						if (!PreviousNMILevel && NMILevelDetector) {
+							DoNMI = true;
+						}
+
+						clock();
+						nes->ppu.ppuClock();
+						nes->ppu.ppuClock();
+						nes->ppu.ppuClock();
+					}
+					// Yield to the OS to keep UI responsive
+					std::this_thread::sleep_for(std::chrono::microseconds(500));
+				}
+			}
+		});
+	} else {
+		// Thread exists, just resume
+		continuous_running.store(true);
+		runCV.notify_all();
+	}
+}
+
+// This method is retained for compatibility; when using the worker thread it will not be used by main loop.
 void bugCpu::continueRunning() {
-	if (continuous_running && !CPU_Halted) {
-		continue_instruction();  // Execute one complete instruction per frame
+	// If a dedicated worker thread is running, don't execute on the caller thread.
+	if (cpuThreadRunning.load()) return;
+	if (continuous_running.load() && !CPU_Halted) {
+		// Execute a small batch of CPU instructions on the calling thread (fallback)
+		const int batch = 64;
+		for (int i = 0; i < batch && continuous_running.load() && !CPU_Halted; ++i) {
+			bool PreviousNMILevel = NMILevelDetector;
+			NMILevelDetector = (nes->ppu.status.vBlank  && nes->ppu.ctrl.enableNMI);
+			if (!PreviousNMILevel && NMILevelDetector) {
+				DoNMI = true;
+			}
+			clock();
+			nes->ppu.ppuClock();
+			nes->ppu.ppuClock();
+			nes->ppu.ppuClock();
+		}
 	}
 }
 
@@ -163,9 +259,6 @@ std::string bugCpu::parseFlags(uint8_t stat) {
 	return flags;
 }
 
-void bugCpu::run() {
-	continuous_running = true;
-}
 
 std::vector<uint8_t> bugCpu::ReadAllBytes(const std::string& path)
 {
@@ -195,13 +288,19 @@ void bugCpu::reset() {
 }
 
 void bugCpu::reload() {
+	// Stop background execution before resetting state
+	stopExecution();
+
 	// Clear all systems variables
 	A = 0;
 	X = 0;
 	Y = 0;
 	status = 0;
 	RAM = {};
-	traceLog = {};
+	{
+		std::lock_guard<std::mutex> lg(traceMutex);
+		traceLog.clear();
+	}
 	cycles = 0;
 	clockCount = 0;
 	reset();
@@ -478,14 +577,18 @@ uint8_t bugCpu::BPL() {
 
 // Break
 uint8_t bugCpu::BRK() {
+	if (!DoNMI) {
+		PC++;
+	}
 	Push(uint8_t(PC >> 8));	// Pushes High Byte
 	Push(uint8_t(PC & 0xFF));	// Pushes Low Byte
 	uint8_t Temp = status | 0x10;	// Sets bit 4 (Break flag) before pushing to stack
 	Push(Temp);
 	setFlag(I, true);
-	uint8_t TLow = Read(0xFFFE);
-	uint8_t THigh = Read(0xFFFF);
-	PC = (THigh << 8) | TLow;	// Jumps to IRQ Handler
+	uint8_t TLow = Read(DoNMI ? 0xFFFA : 0xFFFE);
+	uint8_t THigh = Read(DoNMI ? 0xFFFB : 0xFFFF);
+	PC = (THigh << 8) | TLow;	// Jumps to IRQ Handler or NMI Handler
+	DoNMI = false;	// we set it to false after handling it
 	return 0;
 }
 
