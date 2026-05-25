@@ -109,6 +109,31 @@ void bugPpu::cpuWrite(uint16_t address, uint8_t data) {
     }
 }
 
+uint8_t bugPpu::readPPU(uint16_t address) {
+    if (v < 0x2000) {
+        return ppuRead(v);
+    }
+    else if (v < 0x3F00) {
+        // Read from the Nametables and we once again check for horizontal or vertical mirroring
+        if (nes->cart.nametableArr == 0) {
+            // Horizontal
+            return VRAM[(v & 0x3FF) | v & 0x800 >> 1];
+        } else {
+            // Vertical
+            return VRAM[v & 0x7FF];
+        }
+    }
+    else {
+        // Read from Palette RAM
+        if ((v & 3) == 0) {
+            return paletteRAM[v & 0x0F];
+        }
+        else {
+            return paletteRAM[v & 0x1F];
+        }
+    }
+}
+
 // This function is for when the CPU reads FROM the PPU
 uint8_t bugPpu::cpuRead(uint16_t address) {
     switch (address) {
@@ -123,7 +148,6 @@ uint8_t bugPpu::cpuRead(uint16_t address) {
         }
         case 0x2007:
             temp = ppuReadBuffer;
-
             if (v < 0x2000) {
                 ppuReadBuffer = ppuRead(v);
             }
@@ -146,6 +170,7 @@ uint8_t bugPpu::cpuRead(uint16_t address) {
                     temp = paletteRAM[v & 0x1F];
                 }
             }
+
             v += uint16_t(ctrl.vramInc ? 32 : 1);
             v &= 0x3FFF;
             return temp;
@@ -219,6 +244,13 @@ void bugPpu::drawNametable() {
     }
 }
 
+void bugPpu::loadShiftRegisters() {
+    shiftRegisterPatternLo  = (shiftRegisterPatternLo  & 0xFF00) | patternLo;
+    shiftRegisterPatternHi  = (shiftRegisterPatternHi  & 0xFF00) | patternHi;
+    shiftRegisterAttributeLo = (shiftRegisterAttributeLo & 0xFF00) | ((attributeByte & 0x01) ? 0xFF : 0x00);
+    shiftRegisterAttributeHi = (shiftRegisterAttributeHi & 0xFF00) | ((attributeByte & 0x02) ? 0xFF : 0x00);
+}
+
 void bugPpu::ppuClock() {
     if (cycle == 1 && scanline == 241) {
         status.vBlank = 1;
@@ -237,6 +269,41 @@ void bugPpu::ppuClock() {
                     shiftRegisterPatternHi <<= 1;
                     shiftRegisterAttributeLo <<= 1;
                     shiftRegisterAttributeHi <<= 1;
+                }
+                switch (cycle % 8) {
+                    case 0:
+                        patternHi = tempByte;
+                        break;
+                    case 1:
+                        loadShiftRegisters();
+                        ppuAddressBus = (0x2000 + (v & 0x0FFF));
+                        tempByte = readPPU(ppuAddressBus);
+                        break;
+                    case 2:
+                        ppuNextCharacter = tempByte;
+                        break;
+                    case 3:
+                        ppuAddressBus = (0x23C0 | (v & 0x0C00) | ((v >> 4 ) & 0x38) | ((v >> 2 ) & 0x7));
+                        tempByte = readPPU(ppuAddressBus);
+                        break;
+                    case 4:
+                        attributeByte = tempByte;
+                        if ((v & 3) >= 2) {
+                            attributeByte = attributeByte >> 2;
+                        }
+                        if ((((v & 0x3E0) >> 5) & 3) >= 2)
+                        break;
+                    case 5:
+                        ppuAddressBus = (((v & 0x7000)>> 12) | ppuNextCharacter * 16 | (ctrl.backgroundPatternTable ? 0x1000 : 0));
+                        tempByte = readPPU(ppuAddressBus);
+                        break;
+                    case 6:
+                        patternLo = tempByte;
+                        ppuAddressBus += 8;
+                        break;
+                    case 7:
+                        tempByte = readPPU(ppuAddressBus);
+                        break;
                 }
             }
         }

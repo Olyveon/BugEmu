@@ -77,7 +77,13 @@ class bugPpu {
     uint8_t twoBit {};
     uint16_t temp {};       // used for multiple operations as a temporal value
     uint8_t temp8 {};
+    uint8_t tempByte {};
+
+    // for the rendering process
     uint8_t ppuReadBuffer {};
+    uint16_t ppuAddressBus {};
+    uint8_t ppuNextCharacter {};
+
 
     // Ppu internal registers
     bool w {};          // Write Latch
@@ -85,6 +91,7 @@ class bugPpu {
     uint16_t v {};      // VRAM address
 
     uint8_t ppuRead(uint16_t address);
+    uint8_t readPPU(uint16_t address);
     void ppuWrite(uint16_t address, uint8_t data);
 
     void cpuWrite(uint16_t address, uint8_t data);
@@ -102,6 +109,11 @@ class bugPpu {
 
     bugNES *nes = nullptr;
     const uint32_t nesPalette[64];
+
+    void loadShiftRegisters();
+    uint16_t patternLo;
+    uint16_t patternHi;
+    uint8_t attributeByte;
 
 };
 

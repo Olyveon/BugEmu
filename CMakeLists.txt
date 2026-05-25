@@ -18,12 +18,12 @@ endfunction()
 # --- SDL3 ---
 find_package(SDL3 QUIET)
 if (NOT SDL3_FOUND)
-    include_dependency(SDL3 https://github.com/libsdl-org/SDL.git release-3.4.2)
+    include_dependency(SDL3 https://github.com/libsdl-org/SDL.git release-3.4.8)
 endif ()
 
 find_package(SDL3_image)
 if (NOT SDL3_image_FOUND)
-    include_dependency(SDL3_image https://github.com/libsdl-org/SDL_image.git release-3.4.0)
+    include_dependency(SDL3_image https://github.com/libsdl-org/SDL_image.git release-3.4.4)
 endif()
 
 # --- nfd ---
