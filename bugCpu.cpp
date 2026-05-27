@@ -303,6 +303,7 @@ void bugCpu::reload() {
 	}
 	cycles = 0;
 	clockCount = 0;
+	CPU_Halted = false;
 	reset();
 }
 

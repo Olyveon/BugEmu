@@ -57,7 +57,7 @@ void bugNES::ppuWrite(uint16_t address, uint8_t data) {
 void bugNES::reload() {
     cpu.reload();
     ppu.reload();
-    std::fill_n(screenBuffer, 256*128, 0xFF000000);
+    std::fill_n(screenBuffer, 256*240, 0xFF000000);
 }
 
 void bugNES::nesClock() {

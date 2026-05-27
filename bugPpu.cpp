@@ -224,7 +224,7 @@ void bugPpu::ppuClock() {
         status.vBlank = 1;
     }
     else if (cycle == 1 && scanline == 261) {
-        status.vBlank = 1;
+        status.vBlank = 0;
     }
 
     if ((scanline < 240 || scanline == 261)) {
@@ -243,9 +243,6 @@ void bugPpu::ppuClock() {
     }
 
     cycle++;
-    // index = getIndex(cycle, scanline);
-    // color = getColor(index);
-    // setPixel(cycle, scanline, color);
     if (cycle > 341) {
         cycle = 0;
         scanline++;
