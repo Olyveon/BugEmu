@@ -273,6 +273,13 @@ void bugPpu::ppuClock() {
                 switch (cycle % 8) {
                     case 0:
                         patternHi = tempByte;
+                        if ((v & 0x001F) == 0x1F) {
+                            v &= 0xFFE0;
+                            v ^= 0x0400;
+                        }
+                        else {
+                            v++;
+                        }
                         break;
                     case 1:
                         loadShiftRegisters();
@@ -304,6 +311,21 @@ void bugPpu::ppuClock() {
                     case 7:
                         tempByte = readPPU(ppuAddressBus);
                         break;
+                }
+
+                // Increment Y at the end of a visible scanline
+                if (cycle == 256) {
+                    incrementScrollY();
+                }
+
+                // Reset horizontal position at start of next scanline
+                if (cycle == 257) {
+                    resetScrollX();
+                }
+
+                // On pre-render line, restore vertical position (cycles 280–304)
+                if (scanline == 261 && cycle >= 280 && cycle <= 304) {
+                    resetScrollY();
                 }
             }
         }

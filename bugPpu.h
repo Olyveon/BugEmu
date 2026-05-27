@@ -115,6 +115,11 @@ class bugPpu {
     uint16_t patternHi;
     uint8_t attributeByte;
 
+    void incrementScrollY();
+    void incrementScrollX();
+    void resetScrollX();
+    void resetScrollY();
+
 };
 
 
