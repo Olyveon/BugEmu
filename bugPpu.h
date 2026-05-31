@@ -12,7 +12,7 @@
 class bugNES;
 
 class bugPpu {
-    public:
+public:
     bugPpu();
     ~bugPpu();
 
@@ -31,6 +31,14 @@ class bugPpu {
     uint16_t shiftRegisterPatternHi {};
     uint16_t shiftRegisterAttributeLo {};
     uint16_t shiftRegisterAttributeHi {};
+
+    union ppuScroll {
+        struct {
+            uint8_t y : 8;
+            uint8_t x : 8;
+        };
+        uint16_t value;
+    } scroll;
 
     union ppuStatus {
         struct {
@@ -104,8 +112,11 @@ class bugPpu {
     void drawNametable();
 
     void ppuClock();
+    bool drawNewFrame = true;
 
-    private:
+    void dumpVRAMToFile(const char* filename);
+
+private:
 
     bugNES *nes = nullptr;
     const uint32_t nesPalette[64];
@@ -119,6 +130,8 @@ class bugPpu {
     void incrementScrollX();
     void resetScrollX();
     void resetScrollY();
+
+
 
 };
 

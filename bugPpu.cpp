@@ -4,6 +4,8 @@
 
 #include "bugPpu.h"
 #include "bugNES.h"
+#include <fstream>
+#include <iomanip>
 
 bugPpu::bugPpu() :
         // a NTSC color palette
@@ -61,6 +63,14 @@ void bugPpu::cpuWrite(uint16_t address, uint8_t data) {
         case 0x2004:    // OAMDATA
             break;
         case 0x2005:    // PPUSCROLL
+            if (!w) {
+                scroll.x = data & 0x07;
+                temp = ((temp & 0x7FE0 ) | (uint16_t(data) >> 3));
+            }
+            else {
+                t = (t & 0x801F) | (((data & 0xF8) << 2) | ((data & 7) << 12));
+            }
+            w = !w;
             break;
         case 0x2006:    // PPUADDR
             if (!w) {
@@ -84,7 +94,7 @@ void bugPpu::cpuWrite(uint16_t address, uint8_t data) {
                 // write to nametables
                 if (nes->cart.nametableArr == 0) {
                     // vertical arrangement or horizontal mirroring, we do an and with $800 because if not then all addresses would mirror to the first $400 bytes
-                    VRAM[(v & 0x3FF) | v & 0x800 >> 1] = data;
+                    VRAM[(v & 0x3FF) | ((v & 0x800) >> 1)] = data;
 
                 } else {
                     // horizontal arrangement or vertical mirroring
@@ -93,12 +103,20 @@ void bugPpu::cpuWrite(uint16_t address, uint8_t data) {
             } else {
                 // write to palette ram
                 // if index 0 of the palette then use mirror
-                if ((v & 3) == 0) {
-                    // background and sprite bytes of index 0 mirrored, e.g. $0 and $10 are mirrors of each other, same for $4 and $14 and $08 and $18, hence why we use mask $0F
-                    paletteRAM[v & 0x0F] = data;
-                }
-                else {
+                if ((v & 0x03) == 0x00) {
+                    // Universal background color: all $3F00, $3F04, $3F08, $3F0C, $3F10, $3F14, $3F18, $3F1C map to paletteRAM[0]
+                    paletteRAM[0] = data;
+                } else {
+                    // All other palette entries use direct indexing
                     paletteRAM[v & 0x1F] = data;
+                }
+                std::ofstream palLog("palette_writes.log", std::ios::app);
+                if (palLog.is_open()) {
+                    palLog << "PPU write to palette v=0x" << std::hex << v
+                           << " idx=" << std::dec << (int)(v & ((v & 3) == 0 ? 0x0F : 0x1F))
+                           << " data=0x" << std::hex << (int)data
+                           << " ctrl.vramInc=" << std::dec << (int)ctrl.vramInc
+                           << "\n";
                 }
             }
             v += uint16_t(ctrl.vramInc ? 32 : 1);
@@ -110,26 +128,26 @@ void bugPpu::cpuWrite(uint16_t address, uint8_t data) {
 }
 
 uint8_t bugPpu::readPPU(uint16_t address) {
-    if (v < 0x2000) {
-        return ppuRead(v);
+    if (address < 0x2000) {
+        return ppuRead(address);
     }
-    else if (v < 0x3F00) {
+    else if (address < 0x3F00) {
         // Read from the Nametables and we once again check for horizontal or vertical mirroring
         if (nes->cart.nametableArr == 0) {
             // Horizontal
-            return VRAM[(v & 0x3FF) | v & 0x800 >> 1];
+            return VRAM[(address & 0x3FF) | ((address & 0x800) >> 1)];
         } else {
             // Vertical
-            return VRAM[v & 0x7FF];
+            return VRAM[address & 0x7FF];
         }
     }
     else {
         // Read from Palette RAM
-        if ((v & 3) == 0) {
-            return paletteRAM[v & 0x0F];
+        if ((address & 3) == 0) {
+            return paletteRAM[address & 0x0F];
         }
         else {
-            return paletteRAM[v & 0x1F];
+            return paletteRAM[address & 0x1F];
         }
     }
 }
@@ -137,17 +155,13 @@ uint8_t bugPpu::readPPU(uint16_t address) {
 // This function is for when the CPU reads FROM the PPU
 uint8_t bugPpu::cpuRead(uint16_t address) {
     switch (address) {
-        case 0x2002:    // PPUSTATUS
-        {
-            temp8 = 0;
-            temp8 |= uint8_t(status.value ? 0x80 : 0x00);
-            temp8 |= 0x40;
+        case 0x2002:    //PPUSTATUS
+            temp8 = (status.value & 0xE0) | (ppuReadBuffer & 0x1F); // lower 5 bits are open bus
             status.vBlank = 0;
             w = false;
             return temp8;
-        }
-        case 0x2007:
-            temp = ppuReadBuffer;
+        case 0x2007: {
+            uint8_t ret = ppuReadBuffer;
             if (v < 0x2000) {
                 ppuReadBuffer = ppuRead(v);
             }
@@ -155,7 +169,7 @@ uint8_t bugPpu::cpuRead(uint16_t address) {
                 // Read from the Nametables and we once again check for horizontal or vertical mirroring
                 if (nes->cart.nametableArr == 0) {
                     // Horizontal
-                    ppuReadBuffer = VRAM[(v & 0x3FF) | v & 0x800 >> 1];
+                    ppuReadBuffer = VRAM[(v & 0x3FF) | ((v & 0x800) >> 1)];
                 } else {
                     // Vertical
                     ppuReadBuffer = VRAM[v & 0x7FF];
@@ -164,16 +178,17 @@ uint8_t bugPpu::cpuRead(uint16_t address) {
             else {
                 // Read from Palette RAM
                 if ((v & 3) == 0) {
-                    temp = paletteRAM[v & 0x0F];
+                    ret = paletteRAM[0];
                 }
                 else {
-                    temp = paletteRAM[v & 0x1F];
+                    ret = paletteRAM[v & 0x1F];
                 }
             }
 
             v += uint16_t(ctrl.vramInc ? 32 : 1);
             v &= 0x3FFF;
-            return temp;
+            return ret;
+        }
         default:
             return 0;
     }
@@ -242,6 +257,7 @@ void bugPpu::drawNametable() {
             }
         }
     }
+    drawNewFrame = true;
 }
 
 void bugPpu::loadShiftRegisters() {
@@ -254,6 +270,7 @@ void bugPpu::loadShiftRegisters() {
 void bugPpu::ppuClock() {
     if (cycle == 1 && scanline == 241) {
         status.vBlank = 1;
+        drawNewFrame = true;
     }
     else if (cycle == 1 && scanline == 261) {
         status.vBlank = 0;
@@ -295,10 +312,17 @@ void bugPpu::ppuClock() {
                         break;
                     case 4:
                         attributeByte = tempByte;
-                        if ((v & 3) >= 2) {
-                            attributeByte = attributeByte >> 2;
-                        }
-                        if ((((v & 0x3E0) >> 5) & 3) >= 2)
+                        // if ((v & 3) >= 2) {
+                        //     attributeByte = attributeByte >> 2;
+                        // }
+                        // if ((((v & 0x3E0) >> 5) & 3) >= 2) {
+                        //     attributeByte = attributeByte >> 4;
+                        // }
+                        // attributeByte = attributeByte & 0x03;
+                    {
+                        uint8_t shift = (uint8_t)((((v >> 4) & 4) | ((v >> 2) & 2)));
+                        attributeByte = (attributeByte >> shift) & 0x03;
+                    }
                         break;
                     case 5:
                         ppuAddressBus = (((v & 0x7000)>> 12) | ppuNextCharacter * 16 | (ctrl.backgroundPatternTable ? 0x1000 : 0));
@@ -313,19 +337,42 @@ void bugPpu::ppuClock() {
                         break;
                 }
 
-                // Increment Y at the end of a visible scanline
-                if (cycle == 256) {
-                    incrementScrollY();
-                }
 
-                // Reset horizontal position at start of next scanline
-                if (cycle == 257) {
-                    resetScrollX();
-                }
+            }
+        }
+        if (mask.showBackground || mask.showSprites) {
+            // Increment Y at the end of a visible scanline
+            if (cycle == 256) {
+                incrementScrollY();
+            }
 
-                // On pre-render line, restore vertical position (cycles 280–304)
-                if (scanline == 261 && cycle >= 280 && cycle <= 304) {
-                    resetScrollY();
+            // Reset horizontal position at start of next scanline
+            if (cycle == 257) {
+                resetScrollX();
+            }
+
+            // On pre-render line, restore vertical position (cycles 280–304)
+            if (scanline == 261 && cycle >= 280 && cycle <= 304) {
+                resetScrollY();
+            }
+            if (scanline < 241 && cycle <= 256) {
+                uint8_t palHi = 0;
+                uint8_t palLo = 0;
+                if (mask.showBackground && (cycle > 8 || mask.showBackgroundLeft)) {
+                    uint8_t col0 =  (shiftRegisterPatternLo >> (15 - scroll.x)) & 1;
+                    uint8_t col1 =  (shiftRegisterPatternHi >> (15 - scroll.x)) & 1;
+                    palLo = (col1 << 1 ) | col0;
+
+                    uint8_t pal0 =  shiftRegisterAttributeLo >> (15 - scroll.x) & 1;
+                    uint8_t pal1 =  shiftRegisterAttributeHi >> (15 - scroll.x) & 1;
+                    palHi = (pal1 << 1) | pal0;
+
+                    if (palLo == 0 && palHi != 0) {
+                        palHi = 0;
+                    }
+                    uint8_t colorByte = (palHi << 2) | palLo;
+                    color = getColor(colorByte);
+                    setPixel(cycle - 1, scanline, color);
                 }
             }
         }
@@ -341,3 +388,75 @@ void bugPpu::ppuClock() {
     }
 }
 
+void bugPpu::incrementScrollY() {
+    if ((v & 0x7000) != 0x7000) {
+        v += 0x1000;
+    }
+    else {
+        v &= 0x0FFF;
+        int y = (v & 0x03E0) >> 5;
+        if (y == 29) {
+            y = 0;
+            v ^= 0x0800;    // Reset the y value and flip the 11th bit in the v register
+        }
+        else {
+            y++;
+            y &= 0x1F;  // we make sure that its only the 6 bits we care about
+        }
+        v = (uint16_t)((v & 0xFC1F) | (y << 5));
+    }
+}
+
+void bugPpu::resetScrollX() {
+    v = (uint16_t)((v & 0xFBE0) | (t & 0x041F));
+}
+
+void bugPpu::resetScrollY() {
+    v = (uint16_t)((v & 0x041F) | (t & 0x7EB0));
+}
+
+void bugPpu::dumpVRAMToFile(const char* filename) {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        return;
+    }
+
+    // Dump nametables
+    file << "=== NAMETABLES ===\n";
+    for (int nt = 0; nt < 2; nt++) {
+        file << "\nNametable " << nt << ":\n";
+        uint16_t offset = nt * 0x400;
+        for (int row = 0; row < 30; row++) {
+            for (int col = 0; col < 32; col++) {
+                file << std::hexfloat << std::setw(2) << std::setfill('0')
+                     << (int)VRAM[offset + row * 32 + col] << " ";
+            }
+            file << "\n";
+        }
+    }
+
+    // Dump attribute tables
+    file << "\n=== ATTRIBUTE TABLES ===\n";
+    for (int at = 0; at < 2; at++) {
+        file << "\nAttribute Table " << at << ":\n";
+        uint16_t offset = at * 0x400 + 0x3C0;
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                file << std::hexfloat << std::setw(2) << std::setfill('0')
+                     << (int)VRAM[offset + row * 8 + col] << " ";
+            }
+            file << "\n";
+        }
+    }
+
+    // Dump palette RAM
+    file << "\n=== PALETTE RAM ===\n";
+    for (int i = 0; i < 32; i++) {
+        if (i % 16 == 0) file << "\n";
+        file << std::hexfloat << std::setw(2) << std::setfill('0')
+             << (int)paletteRAM[i] << " ";
+    }
+    file << "\n";
+
+    file.close();
+}

@@ -211,7 +211,7 @@ void renderMain(void *appstate) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Debug")) {
-            if (ImGui::MenuItem("Trace Logger")) {
+            if (ImGui::MenuItem("Trace Logger & Debugger")) {
                 openDebugWindow();          // only opens if not already open
                 show_debug_window = true;
                 as->nes.cpu.logging = true;
@@ -239,7 +239,11 @@ void renderMain(void *appstate) {
     }
 
     // Update pixels on screen
-    SDL_UpdateTexture(as->screenTexture, nullptr, as->nes.screenBuffer, NES_W * sizeof(uint32_t));
+    if (as->nes.ppu.drawNewFrame) {
+        SDL_UpdateTexture(as->screenTexture, nullptr, as->nes.screenBuffer, NES_W * sizeof(uint32_t));
+        as->nes.ppu.drawNewFrame = false;
+    }
+
     SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255);
     SDL_RenderClear(renderer);
 
@@ -285,6 +289,7 @@ void renderDebug(void *appstate) {
     ImGui::Text("A:  0x%02X", as->nes.cpu.A);
     ImGui::Text("X:  0x%02X", as->nes.cpu.X);
     ImGui::Text("Y:  0x%02X", as->nes.cpu.Y);
+    ImGui::Text("Nametable Mirroring: %d", as->nes.cart.nametableArr);
 
     if (ImGui::BeginTable("TraceLog", 2, ImGuiTableFlags_Borders |
                                              ImGuiTableFlags_RowBg   |
@@ -316,6 +321,8 @@ void renderDebug(void *appstate) {
     if (ImGui::Button("Run one CPU cycle")) as->nes.cpu.clock();
     if (ImGui::Button("Reset"))             as->nes.cpu.reset();
     if (ImGui::Button("Forcefully unhalt cpu")) as->nes.cpu.CPU_Halted = false;
+    if (ImGui::Button("Forcefully show frame")) as->nes.ppu.drawNewFrame = true;
+    if (ImGui::Button("Dump VRAM to file")) as->nes.ppu.dumpVRAMToFile("vram_dump.txt");
     if (ImGui::Button("Continue until next instruction")) as->nes.cpu.continue_instruction();
 
     ImGui::End();
@@ -332,10 +339,11 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
-    renderMain(as);
-
     // Execute one instruction per frame if emulation is running
     as->nes.cpu.continueRunning();
+    renderMain(as);
+
+
 
     ImGui::Render();
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);

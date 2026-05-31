@@ -34,10 +34,23 @@ void bugCartridge::setHeaderData() {
 
 void bugCartridge::insertCartridge() {
     auto HeaderedROM = ReadAllBytes(filepath);
-    std::memcpy(ROM.data(), HeaderedROM.data() + 0x10, 0x8000);
+
     std::memcpy(Header.data(), HeaderedROM.data(), 0x10);
-    std::memcpy(chrMem.data(), HeaderedROM.data() + 0x8010, 0x2000);
-    setHeaderData();
+    setHeaderData();  // must be before we use prgRom_Size
+
+    size_t prgSize = prgRom_Size * 0x4000;
+
+    // Always copy PRG ROM using the actual size from the header
+    std::memcpy(ROM.data(), HeaderedROM.data() + 0x10, prgSize);
+
+    // Only copy CHR ROM if the cart actually has it
+    if (chrRom_Size > 0) {
+        size_t chrSize = chrRom_Size * 0x2000;
+        std::memcpy(chrMem.data(), HeaderedROM.data() + 0x10 + prgSize, chrSize);
+    } else {
+        // CHR RAM — zero it out so writes start from a clean state
+        chrMem.fill(0);
+    }
 }
 
 void bugCartridge::cpuRead(uint16_t address, uint8_t &data) {
