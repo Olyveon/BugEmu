@@ -156,7 +156,8 @@ uint8_t bugPpu::readPPU(uint16_t address) {
 uint8_t bugPpu::cpuRead(uint16_t address) {
     switch (address) {
         case 0x2002:    //PPUSTATUS
-            temp8 = (status.value & 0xE0) | (ppuReadBuffer & 0x1F); // lower 5 bits are open bus
+            temp8 = status.vBlank == 1 ? 0x80 : 0; // lower 5 bits are open bus
+            temp8 |= 0x40;
             status.vBlank = 0;
             w = false;
             return temp8;
@@ -228,6 +229,7 @@ void bugPpu::drawPatternTable() {
             }
         }
     }
+    drawNewFrame = true;
 }
 
 void bugPpu::drawNametable() {
@@ -263,8 +265,8 @@ void bugPpu::drawNametable() {
 void bugPpu::loadShiftRegisters() {
     shiftRegisterPatternLo  = (shiftRegisterPatternLo  & 0xFF00) | patternLo;
     shiftRegisterPatternHi  = (shiftRegisterPatternHi  & 0xFF00) | patternHi;
-    shiftRegisterAttributeLo = (shiftRegisterAttributeLo & 0xFF00) | ((attributeByte & 0x01) ? 0xFF : 0x00);
-    shiftRegisterAttributeHi = (shiftRegisterAttributeHi & 0xFF00) | ((attributeByte & 0x02) ? 0xFF : 0x00);
+    shiftRegisterAttributeLo = (shiftRegisterAttributeLo & 0xFF00) | ((attributeByte & 0x01) == 1 ? 0xFF : 0x00);
+    shiftRegisterAttributeHi = (shiftRegisterAttributeHi & 0xFF00) | ((attributeByte & 0x02) == 2 ? 0xFF : 0x00);
 }
 
 void bugPpu::ppuClock() {
@@ -287,53 +289,54 @@ void bugPpu::ppuClock() {
                     shiftRegisterAttributeLo <<= 1;
                     shiftRegisterAttributeHi <<= 1;
                 }
-                switch (cycle % 8) {
+                uint8_t cycleTick = (cycle - 1) & 7;
+                switch (cycleTick) {
                     case 0:
-                        patternHi = tempByte;
-                        if ((v & 0x001F) == 0x1F) {
+                        loadShiftRegisters();
+                        ppuAddressBus = uint16_t(0x2000 + (v & 0x0FFF));
+                        step8_temp = readPPU(ppuAddressBus);
+                        break;
+                    case 1:
+                        ppuNextCharacter = step8_temp;
+                        break;
+                    case 2:
+                        ppuAddressBus = uint16_t(0x23C0 | (v & 0x0C00) | ((v >> 4 ) & 0x38) | ((v >> 2 ) & 0x07));
+                        step8_temp = readPPU(ppuAddressBus);
+                        break;
+                    case 3:
+                        attributeByte = step8_temp;
+                        if ((v & 3) >= 2) {
+                            attributeByte = attributeByte >> 2;
+                        }
+                        if ((((v & 0x3E0) >> 5) & 3) >= 2) {
+                            attributeByte = attributeByte >> 4;
+                        }
+                        attributeByte = attributeByte & 0x03;
+                    // {
+                    //     uint8_t shift = (uint8_t)((((v >> 4) & 4) | ((v >> 2) & 2)));
+                    //     attributeByte = (attributeByte >> shift) & 0x03;
+                    // }
+                        break;
+                    case 4:
+                        ppuAddressBus = (((v & 0x7000)>> 12) | ppuNextCharacter * 16 | (ctrl.backgroundPatternTable ? 0x1000 : 0));
+                        step8_temp = readPPU(ppuAddressBus);
+                        break;
+                    case 5:
+                        patternLo = step8_temp;
+                        ppuAddressBus += 8;
+                        break;
+                    case 6:
+                        step8_temp = readPPU(ppuAddressBus);
+                        break;
+                    case 7:
+                        patternHi = step8_temp;
+                        if ((v & 0x001F) == 31) {
                             v &= 0xFFE0;
                             v ^= 0x0400;
                         }
                         else {
                             v++;
                         }
-                        break;
-                    case 1:
-                        loadShiftRegisters();
-                        ppuAddressBus = (0x2000 + (v & 0x0FFF));
-                        tempByte = readPPU(ppuAddressBus);
-                        break;
-                    case 2:
-                        ppuNextCharacter = tempByte;
-                        break;
-                    case 3:
-                        ppuAddressBus = (0x23C0 | (v & 0x0C00) | ((v >> 4 ) & 0x38) | ((v >> 2 ) & 0x7));
-                        tempByte = readPPU(ppuAddressBus);
-                        break;
-                    case 4:
-                        attributeByte = tempByte;
-                        // if ((v & 3) >= 2) {
-                        //     attributeByte = attributeByte >> 2;
-                        // }
-                        // if ((((v & 0x3E0) >> 5) & 3) >= 2) {
-                        //     attributeByte = attributeByte >> 4;
-                        // }
-                        // attributeByte = attributeByte & 0x03;
-                    {
-                        uint8_t shift = (uint8_t)((((v >> 4) & 4) | ((v >> 2) & 2)));
-                        attributeByte = (attributeByte >> shift) & 0x03;
-                    }
-                        break;
-                    case 5:
-                        ppuAddressBus = (((v & 0x7000)>> 12) | ppuNextCharacter * 16 | (ctrl.backgroundPatternTable ? 0x1000 : 0));
-                        tempByte = readPPU(ppuAddressBus);
-                        break;
-                    case 6:
-                        patternLo = tempByte;
-                        ppuAddressBus += 8;
-                        break;
-                    case 7:
-                        tempByte = readPPU(ppuAddressBus);
                         break;
                 }
 
@@ -363,9 +366,9 @@ void bugPpu::ppuClock() {
                     uint8_t col1 =  (shiftRegisterPatternHi >> (15 - scroll.x)) & 1;
                     palLo = (col1 << 1 ) | col0;
 
-                    uint8_t pal0 =  shiftRegisterAttributeLo >> (15 - scroll.x) & 1;
-                    uint8_t pal1 =  shiftRegisterAttributeHi >> (15 - scroll.x) & 1;
-                    palHi = (pal1 << 1) | pal0;
+                    uint8_t pal0 =  ((shiftRegisterAttributeLo) >> (15 - scroll.x)) & 1;
+                    uint8_t pal1 =  ((shiftRegisterAttributeHi) >> (15 - scroll.x)) & 1;
+                    palHi = uint8_t((pal1 << 1) | pal0);
 
                     if (palLo == 0 && palHi != 0) {
                         palHi = 0;

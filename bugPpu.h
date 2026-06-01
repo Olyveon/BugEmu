@@ -18,6 +18,7 @@ public:
 
     std::array<uint8_t, 0x800> VRAM {};
     std::array<uint8_t, 0x20> paletteRAM {};
+    std::array<uint8_t, 0x100> OAM {};
 
     void ConnectSystem(bugNES *n) { nes = n; }
     void reload();
@@ -85,7 +86,7 @@ public:
     uint8_t twoBit {};
     uint16_t temp {};       // used for multiple operations as a temporal value
     uint8_t temp8 {};
-    uint8_t tempByte {};
+    uint8_t step8_temp {};
 
     // for the rendering process
     uint8_t ppuReadBuffer {};

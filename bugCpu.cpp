@@ -465,7 +465,7 @@ uint8_t bugCpu::ADC() {
 	return 1;
 }
 
-//Bitwise AND between data and accumulator
+//Bitwise AND between data and accumulator and loads the result into a
 uint8_t bugCpu::AND() {
 	fetch();
 	A &= fetched;
