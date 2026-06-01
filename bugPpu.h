@@ -16,9 +16,11 @@ public:
     bugPpu();
     ~bugPpu();
 
+    // Memory
     std::array<uint8_t, 0x800> VRAM {};
     std::array<uint8_t, 0x20> paletteRAM {};
     std::array<uint8_t, 0x100> OAM {};
+    std::array<uint8_t, 0x20> secondaryOAM {};
 
     void ConnectSystem(bugNES *n) { nes = n; }
     void reload();
@@ -111,6 +113,29 @@ public:
     void setPixel(uint8_t x, uint8_t y, uint32_t pixelColor);
     void drawPatternTable();
     void drawNametable();
+
+    // OAM functions and variables
+    void spriteEvaluation();
+    void oamDma(uint8_t data);
+    uint8_t spriteEvalTemp {};
+    uint8_t OAMAddr {};
+    uint8_t secondaryOAMAddr {};
+    bool secondaryOAMfull {};
+    uint8_t secondaryOAMSize {};
+
+    bool spriteEvalOverflow {};
+    uint8_t spriteEvalTick {};
+
+    std::array<uint8_t, 0x8> spriteShiftRegisterLo {};
+    std::array<uint8_t, 0x8> spriteShiftRegisterHi {};
+
+    std::array<uint8_t, 0x8> spriteAttribute {};
+    std::array<uint8_t, 0x8> spritePattern {};
+    std::array<uint8_t, 0x8> spriteX {};
+    std::array<uint8_t, 0x8> spriteY {};
+
+    bool scanlineContainsSprite0 {};
+
 
     void ppuClock();
     bool drawNewFrame = true;

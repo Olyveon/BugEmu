@@ -35,6 +35,9 @@ void bugNES::cpuWrite(uint16_t address, uint8_t value) {
         // ram write
         ram[address & 0x7FF] = value;
     }
+    if (address == 0x4014) {
+        ppu.oamDma(value);
+    }
     else if (address < 0x4000) {
         // Write to a ppu register, it's mirrored from $2000 to $3FFF,
         // but are only 8 bytes of registers, so we mask it towards the "real"

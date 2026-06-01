@@ -45,6 +45,7 @@ void bugPpu::reload() {
     ctrl.value = 0x00;
     mask.value = 0x00;
     status.value = 0x00;
+    drawNewFrame = true;
 }
 
 // This function is for when the CPU is writing TO the PPU
@@ -156,7 +157,8 @@ uint8_t bugPpu::readPPU(uint16_t address) {
 uint8_t bugPpu::cpuRead(uint16_t address) {
     switch (address) {
         case 0x2002:    //PPUSTATUS
-            temp8 = status.vBlank == 1 ? 0x80 : 0; // lower 5 bits are open bus
+            temp8 = 0;
+            temp8 = status.value; // lower 5 bits are open bus
             temp8 |= 0x40;
             status.vBlank = 0;
             w = false;
@@ -462,4 +464,102 @@ void bugPpu::dumpVRAMToFile(const char* filename) {
     file << "\n";
 
     file.close();
+}
+
+void bugPpu::oamDma(uint8_t data) {
+    uint16_t sourceAddress = uint16_t(data) << 8;
+    for (int i = 0; i < 256; i++) {
+        OAM[i] = nes->cpuRead(sourceAddress + i);
+    }
+}
+
+void bugPpu::spriteEvaluation() {
+    if (cycle == 0) {
+        secondaryOAMAddr = 0x00;
+        secondaryOAMfull = false;
+    }
+    if (cycle > 0 && cycle <= 64) {
+        if (( cycle & 1) == 1) {
+            spriteEvalTemp = 0xFF;
+        }
+        else {
+            secondaryOAM[cycle >> 1] = spriteEvalTemp;
+            secondaryOAMAddr++;
+            secondaryOAMAddr &= 0x1F;
+        }
+    } else if (cycle > 64 && cycle <= 256) {
+        if ((cycle & 1) == 1) {
+            spriteEvalTemp = OAM[OAMAddr];
+        }
+        else {
+            if (!spriteEvalOverflow)
+            {
+                if (!secondaryOAMfull) {
+                    secondaryOAM[secondaryOAMAddr] = spriteEvalTemp;
+                }
+                if (spriteEvalTick == 0) {
+                    if (scanline - spriteEvalTemp >= 0 && scanline - spriteEvalTemp < (ctrl.spriteSize ? 0x10 : 0x8)) {
+                        if (!secondaryOAMfull) {
+                            secondaryOAMAddr++;
+                            OAMAddr++;
+                            if (cycle == 66) {
+                                scanlineContainsSprite0 = true;
+                            }
+                        }
+                        else {
+                            status.spriteOverflow = 1;
+                        }
+                        spriteEvalTick++;
+                    }
+                    else OAMAddr += 4;
+                } else {
+                    secondaryOAMAddr++;
+                    OAMAddr++;
+                    if (secondaryOAMAddr == 0x20) {
+                        secondaryOAMfull = true;
+                    }
+                    spriteEvalTick++;
+                    spriteEvalTick &= 0x03;
+                }
+                if (OAMAddr == 0) {
+                    spriteEvalOverflow = true;
+                }
+            }
+        }
+    } else if (cycle > 256 && cycle <= 320) {
+        OAMAddr = 0;
+        if (cycle == 257) {
+            secondaryOAMSize = secondaryOAMAddr;
+            secondaryOAMAddr = 0;
+            spriteEvalTick = 0;
+        }
+        switch (spriteEvalTick) {
+            case 0:
+                spriteY[secondaryOAMAddr / 4 ] = secondaryOAM[secondaryOAMAddr];
+                secondaryOAMAddr++;
+                break;
+            case 1:
+                spritePattern[secondaryOAMAddr / 4 ] = secondaryOAM[secondaryOAMAddr];
+                secondaryOAMAddr++;
+                break;
+            case 2:
+                spriteAttribute[secondaryOAMAddr / 4 ] = secondaryOAM[secondaryOAMAddr];
+                secondaryOAMAddr++;
+                break;
+            case 3:
+                spriteX[secondaryOAMAddr / 4 ] = secondaryOAM[secondaryOAMAddr];
+                // we dont need to increment the secondary address here
+                break;
+            case 4:
+                break;
+            case 5:
+                break;
+            case 6:
+                break;
+            case 7:
+                break;
+        }
+        spriteEvalTick++;
+        spriteEvalTick &= 7;
+    }
 }
