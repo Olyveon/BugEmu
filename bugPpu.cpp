@@ -563,3 +563,16 @@ void bugPpu::spriteEvaluation() {
         spriteEvalTick &= 7;
     }
 }
+
+uint16_t bugPpu::findYaddressInCHR() {
+    if (!ctrl.spriteSize) {
+        // 8x8 Sprites
+        // Depending on which pattern table we are we might start at address $0000 or $1000
+        // then we have to add the pattern value from OAM * 16
+        // plus the number of scanline from the top of the object
+        // and finally if the attributes are y-flipped, its 7 -  the number of scanlines from the top
+        if (((spriteAttribute[secondaryOAMSlot])))
+    } else {
+        // 8x16 Sprites
+    }
+}

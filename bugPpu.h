@@ -116,12 +116,14 @@ public:
 
     // OAM functions and variables
     void spriteEvaluation();
+    uint16_t findYaddressInCHR();
     void oamDma(uint8_t data);
     uint8_t spriteEvalTemp {};
     uint8_t OAMAddr {};
     uint8_t secondaryOAMAddr {};
     bool secondaryOAMfull {};
     uint8_t secondaryOAMSize {};
+
 
     bool spriteEvalOverflow {};
     uint8_t spriteEvalTick {};
